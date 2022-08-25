@@ -1,5 +1,4 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
+'''assure layers are working'''
 import unittest
 import numpy as np
 
@@ -9,6 +8,8 @@ from glaucus import (
     TimeDomain2FreqDomain,
     FreqDomain2TimeDomain,
     RMSNormalize,
+    GaussianNoise,
+    RFLoss,
 )
 
 class TestDomainTransforms(unittest.TestCase):
@@ -48,3 +49,38 @@ class TestNormalization(unittest.TestCase):
                 # recall that to calculate true RMS you can either use this, norm, or vdot
                 y_rms = torch.sqrt(torch.mean(torch.square(torch.abs(y_nl)), axis=-1))
                 self.assertTrue(torch.allclose(y_rms, torch.ones(batch_size), rtol=1e-2))
+
+
+class TestGaussianNoise(unittest.TestCase):
+    def test_skip_on_eval(self):
+        '''
+        When self.training == True (before eval) noise will be added with this layer.
+        Otherwise it will just return the same input.
+        '''
+        noise_layer = GaussianNoise(spatial_size=64)
+        alpha = torch.randn(1, 2, 64)
+        omega, _ = noise_layer(alpha)
+        self.assertFalse(torch.equal(alpha, omega))
+        noise_layer.eval()
+        omega, _ = noise_layer(alpha)
+        self.assertTrue(torch.equal(alpha, omega))
+
+    def test_snr_ranges(self):
+        '''lower the SNR, lower the relationship to original signal'''
+        alpha = torch.randn(1, 2, 64)
+        rfloss = RFLoss(weight_spec=0)
+        for min_snr_db in np.arange(-10, 15, 5):
+            high_noise_layer = GaussianNoise(
+                spatial_size=64,
+                min_snr_db=min_snr_db,
+                max_snr_db=min_snr_db+1)
+            low_noise_layer = GaussianNoise(
+                spatial_size=64,
+                min_snr_db=min_snr_db+5,
+                max_snr_db=min_snr_db+6)
+            omega_high, _ = high_noise_layer(alpha)
+            omega_low, _ = low_noise_layer(alpha)
+            self.assertLess(
+                rfloss(alpha, omega_low)[0],
+                rfloss(alpha, omega_high)[0]
+            )

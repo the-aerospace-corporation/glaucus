@@ -1,4 +1,3 @@
-#-*- coding: utf-8 -*-
 import math
 from collections import namedtuple
 import numpy as np

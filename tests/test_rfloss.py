@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 '''assure RFLoss is working'''
 import unittest
 import torch
@@ -61,7 +59,7 @@ class TestRFLoss(unittest.TestCase):
             criterion = RFLoss(spatial_size=spatial_size, weight_fft=1)
             # create a pair of slices with different AM tones
             alpha = torch.vstack((torch.sin(torch.arange(spatial_size)), torch.zeros(spatial_size))).unsqueeze(0)
-            omega = torch.vstack((torch.sin(torch.arange(spatial_size)*.1), torch.zeros(spatial_size))).unsqueeze(0)
+            omega = torch.vstack((torch.sin(torch.arange(spatial_size) * .1), torch.zeros(spatial_size))).unsqueeze(0)
             # fft_loss should be very high
             _, metrics = criterion(alpha, omega)
             self.assertGreater(metrics['fft_loss'], 0.95)

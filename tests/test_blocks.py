@@ -1,11 +1,9 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-'''assure autoencoders are working as expected'''
+'''assure blocks are working'''
 import unittest
 import numpy as np
 import torch
 
-from glaucus import GlaucusNet, blockgen
+from glaucus import GlaucusNet, blockgen, FullyConnected
 
 
 class TestParams(unittest.TestCase):
@@ -20,3 +18,12 @@ class TestParams(unittest.TestCase):
             trash_x = torch.randn(32, 2, spatial_dim)
             trash_y = decoder(encoder(trash_x))
             self.assertEqual(trash_x.shape, trash_y.shape)
+
+    def test_spatial_io_fc(self):
+        '''forward works on a variety of spatial sizes'''
+        for size_in in 2**np.arange(8, 14):
+            for size_out in 2**np.arange(6, 12):
+                autoencoder = FullyConnected(size_in=size_in, size_out=size_out)
+                trash_x = torch.randn(32, size_in)
+                trash_y = autoencoder(trash_x)
+                self.assertEqual(trash_y.shape[1], size_out)

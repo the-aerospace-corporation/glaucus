@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-#-*- coding: utf-8 -*-
 '''
   ________.__
  /  _____/|  | _____   __ __   ____  __ __  ______
@@ -27,5 +26,6 @@ setup(
     install_requires=[
         'torch',                # basic ML framework
         'pytorch_lightning',    # extensions for PyTorch
+        'madgrad',              # our favorite optimizer
     ],
 )

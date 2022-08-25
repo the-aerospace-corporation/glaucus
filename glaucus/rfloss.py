@@ -1,4 +1,3 @@
-#-*- coding: utf-8 -*-
 '''key components needed for RFLoss'''
 
 import torch

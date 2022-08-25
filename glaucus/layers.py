@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 '''custom layers for pytorch'''
 import typing
 import torch
@@ -157,3 +156,36 @@ class DropConnect(pl.LightningModule):
             # Unlike canonical method to multiply survival_rate at test time, here we
             # divide survival_rate at training time, such that no addition compute is needed at test time.
             return x / self.survival_rate * binary_tensor
+
+
+class GaussianNoise(torch.nn.Module):
+    '''
+    Add gaussian noise to RF.
+    Expects NCL format like (batchsize, 2, spatial_size).
+
+    Input should be RMS normalized.
+    Returns RMS normalized output.
+    '''
+    def __init__(self, spatial_size: int = 4096, min_snr_db: float = -3, max_snr_db: float = 20):
+        super().__init__()
+        self.min_snr_db = min_snr_db
+        self.max_snr_db = max_snr_db
+        self._rms_norm = RMSNormalize(spatial_size=spatial_size)
+
+    def forward(self, x):
+        if self.training:
+            snr_db = torch.rand(1, device=x.device)[0] * (self.max_snr_db - self.min_snr_db) + self.min_snr_db
+            snr = 10**(snr_db/10)
+            # unit noise already RMS normalized
+            unit_noise = torch.randn(x.size(), device=x.device, dtype=x.dtype) * 0.7071067811865476
+            # scale signal and noise
+            x = unit_noise + x * snr
+            # as much as I want to use something like this, it's not quite the same as normalizing again
+            # unit_noise / (snr + 1) + x * snr / (snr + 1)
+            x = self._rms_norm(x)
+
+        if self.training:
+            x = x, snr_db
+        else:
+            x = x, None
+        return x
