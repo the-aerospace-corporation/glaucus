@@ -1,0 +1,16 @@
+# This CITATION.cff file was generated with cffinit.
+# Visit https://bit.ly/cffinit to generate yours today!
+
+cff-version: 1.2.0
+title: >-
+  Complex-Valued Radio Signal Loss for Neural
+  Networks
+message: Please cite this software using these metadata.
+type: software
+authors:
+  - given-names: Kye Logue
+    email: kyle.logue@aero.org
+    affiliation: The Aerospace Corporation
+repository-code: >-
+  https://github.com/the-aerospace-corporation/glaucus
+license: LGPL-3.0+

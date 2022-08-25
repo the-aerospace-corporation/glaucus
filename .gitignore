@@ -1,0 +1,24 @@
+# ignore python artifacts
+notebooks/.ipynb_checkpoints/
+*.pyc
+
+# ignore package artifacts
+.eggs/
+.hypothesis/
+build/
+dist/
+glaucus.egg-info/
+
+# ignore coverage & lint output
+__pycache__/
+htmlcov/
+**/.project
+**/.pydevproject
+.coverage
+.pytest_cache
+pylint.log
+pytest.xml
+coverage.xml
+
+# ignore other artifacts
+.vscode
