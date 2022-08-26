@@ -1,3 +1,4 @@
+import logging
 import math
 from collections import namedtuple
 import numpy as np
@@ -8,45 +9,18 @@ from torch import nn
 
 from .layers import DropConnect
 
+log = logging.getLogger(__name__)
+
+# BlockArgs are used to specify a Glaucus architecture, which is thankfully generated smartly by `blockgen`.
 BlockArgs = namedtuple('BlockArgs', [
     'num_repeat', 'kernel_size', 'stride', 'filters_in', 'filters_out', 'expand_ratio', 'squeeze_ratio'])
-'''
-BlockArgs are used to specify a Glaucus architecture, which is thankfully generated smartly by `blockgen`.
-
-In EFNet & EFNetv2 with similar MBConv and Fused-MBConv blocks the following designs were used (for reference):
-
-BlockArgs = namedtuple('BlockArgs', [
-    'num_repeat', 'kernel_size', 'stride', 'filters_in', 'filters_out', 'expand_ratio', 'squeeze_ratio', 'fused'])
-
-# encoder blocks go from top to bottom; reverse for decoder
-# original efnet blocks
-efnet_blocks = [
-    BlockArgs(num_repeat=1, kernel_size=3, stride=1, filters_in=32, filters_out=16, expand_ratio=1, squeeze_ratio=4, fused=False),
-    BlockArgs(num_repeat=2, kernel_size=3, stride=2, filters_in=16, filters_out=24, expand_ratio=6, squeeze_ratio=4, fused=False),
-    BlockArgs(num_repeat=2, kernel_size=5, stride=2, filters_in=24, filters_out=40, expand_ratio=6, squeeze_ratio=4, fused=False),
-    BlockArgs(num_repeat=3, kernel_size=3, stride=2, filters_in=40, filters_out=80, expand_ratio=6, squeeze_ratio=4, fused=False),
-    BlockArgs(num_repeat=3, kernel_size=5, stride=1, filters_in=80, filters_out=112, expand_ratio=6, squeeze_ratio=4, fused=False),
-    BlockArgs(num_repeat=4, kernel_size=5, stride=2, filters_in=112, filters_out=192, expand_ratio=6, squeeze_ratio=4, fused=False),
-    BlockArgs(num_repeat=1, kernel_size=3, stride=1, filters_in=192, filters_out=320, expand_ratio=6, squeeze_ratio=4, fused=False),
-]
-
-# original efnetv2 blocks
-efnetv2_blocks = [
-    BlockArgs(num_repeat=2, kernel_size=3, stride=1, filters_in=12, filters_out=24, expand_ratio=1, squeeze_ratio=1, fused=True),
-    BlockArgs(num_repeat=4, kernel_size=3, stride=2, filters_in=24, filters_out=48, expand_ratio=4, squeeze_ratio=1, fused=True),
-    BlockArgs(num_repeat=4, kernel_size=5, stride=2, filters_in=48, filters_out=64, expand_ratio=4, squeeze_ratio=1, fused=True),
-    BlockArgs(num_repeat=6, kernel_size=5, stride=2, filters_in=64, filters_out=128, expand_ratio=4, squeeze_ratio=4, fused=False),
-    BlockArgs(num_repeat=9, kernel_size=5, stride=1, filters_in=128, filters_out=160, expand_ratio=6, squeeze_ratio=4, fused=False),
-    BlockArgs(num_repeat=15, kernel_size=3, stride=2, filters_in=160, filters_out=256, expand_ratio=6, squeeze_ratio=4, fused=False),
-]
-'''
 
 
 def blockgen(
         spatial_in:int=4096, spatial_out:int=8,
         filters_in:int=2, filters_out:int=64,
         expand_ratio:int=4, squeeze_ratio:int=4,
-        steps:int=6, mode:str='encoder', verbose:int=1, even:bool=False):
+        steps:int=6, mode:str='encoder'):
     '''
     smartly generate block sequence
 
@@ -82,15 +56,11 @@ def blockgen(
         kernel_percent = np.flip(kernel_percent)
     # calculate the filters per step
     filter_steps = np.geomspace(filters_in, filters_out, steps+1).round().astype(int)
-    if even:
-        # make filter count even for spectral crossover (disabled!)
-        filter_steps = filter_steps // 2 * 2
-        print('even', filter_steps)
 
     # calculate the repeats per block; 15 max, for now use 8
     repeat_steps = np.geomspace(2, 8, steps).round().astype(int)
     blocks = []
-    if verbose >= 2: params = np.zeros(steps)
+    params = np.zeros(steps) # only used for logging
     for sdx in range(steps):
         if mode == 'encoder':
             spatial_in /= strides[sdx]
@@ -101,7 +71,7 @@ def blockgen(
             # this is bad
             # https://ezyang.github.io/convolution-visualizer/index.html
             # https://distill.pub/2016/deconv-checkerboard/
-            print('bumping k to prevent checkerboarding resulting from k < stride')
+            log.warning('bumping kernel_size to prevent checkerboarding resulting from kernel_size < stride')
             kernel_size += 2
 
         block = BlockArgs(
@@ -113,21 +83,19 @@ def blockgen(
             expand_ratio=expand_ratio,
             squeeze_ratio=squeeze_ratio,
         )
-        if verbose:
-            print(f'{block}')
-            if verbose >= 2:
-                params[sdx] += block.filters_in * block.filters_out # conv_reshape
-                params[sdx] += block.filters_in * block.filters_in * block.expand_ratio * block.kernel_size # conv_expand
-                params[sdx] += (block.filters_in * block.expand_ratio)**2 # conv_middle
-                params[sdx] += (block.filters_in * block.expand_ratio)**2 / block.squeeze_ratio # linear_squeeze x2
-                params[sdx] += block.filters_in * block.expand_ratio * block.filters_out # conv_tail
-                print(f'params={params[sdx]:.0f}, out_shape=({block.filters_out:.0f}, {spatial_in:.0f})')
+        log.info(f'{block}')
+        params[sdx] += block.filters_in * block.filters_out # conv_reshape
+        params[sdx] += block.filters_in * block.filters_in * block.expand_ratio * block.kernel_size # conv_expand
+        params[sdx] += (block.filters_in * block.expand_ratio)**2 # conv_middle
+        params[sdx] += (block.filters_in * block.expand_ratio)**2 / block.squeeze_ratio # linear_squeeze x2
+        params[sdx] += block.filters_in * block.expand_ratio * block.filters_out # conv_tail
+        log.debug(f'params={params[sdx]:.0f}, out_shape=({block.filters_out:.0f}, {spatial_in:.0f})')
         blocks += [block]
     return blocks
 
 # defaults
-ENCODER_BLOCKS = blockgen(steps=6, spatial_in=4096, spatial_out=8, filters_in=2, filters_out=64, mode='encoder', verbose=0)
-DECODER_BLOCKS = blockgen(steps=6, spatial_in=8, spatial_out=4096, filters_in=64, filters_out=2, mode='decoder', verbose=0)
+ENCODER_BLOCKS = blockgen(steps=6, spatial_in=4096, spatial_out=8, filters_in=2, filters_out=64, mode='encoder')
+DECODER_BLOCKS = blockgen(steps=6, spatial_in=8, spatial_out=4096, filters_in=64, filters_out=2, mode='decoder')
 
 
 class GBlock(pl.LightningModule):
@@ -199,7 +167,7 @@ class GBlock(pl.LightningModule):
     '''
     def __init__(self,
                  filters_in, filters_out, mode='encoder', stride=1, drop_connect_rate=0.2,
-                 expand_ratio=4, squeeze_ratio=4, kernel_size=7, verbose=0):
+                 expand_ratio=4, squeeze_ratio=4, kernel_size=7):
         super().__init__()
         assert mode in ['encoder', 'decoder']
         self.filters_in = filters_in
@@ -207,7 +175,6 @@ class GBlock(pl.LightningModule):
         self.expand_ratio = expand_ratio
         self.squeeze_ratio = squeeze_ratio
         self.mode = mode
-        self.verbose = verbose
         self.stride = stride
         self.bn_mom = 1e-2 # better than torch default
         self.bn_eps = 1e-3 # better than torch default
@@ -270,8 +237,7 @@ class GBlock(pl.LightningModule):
         self._dropconnect = DropConnect(drop_connect_rate)
 
         # Block Info
-        if verbose:
-            print('GBlock{}(stride={}, filters=({},{},{},{}))'.format(
+        log.debug('GBlock{}(stride={}, filters=({},{},{},{}))'.format(
                 'Enc' if self.mode == 'encoder' else 'Dec', self.stride,
                 self.filters_in, self.filters_ex, self.filters_sq, self.filters_out,
                 ))
@@ -281,19 +247,16 @@ class GBlock(pl.LightningModule):
         if self.is_reshaped:
             # we might have different output shape
             identity = self._reshape(identity)
-        if self.verbose: print(self.mode, 'in  {0}x{1}'.format(*x.shape[1:]))
         # Fused Expansion Phase (Inverted Bottleneck)
         x = self._conv_expand(x)
         x = self._bn0(x)
         x = self._activ(x)
-        if self.verbose: print(self.mode, 'ex  {0}x{1}'.format(*x.shape[1:]))
         # Squeeze-Excitation Phase
         if self.squeeze_ratio !=  1:
             x_squeezed = self._avgpool(x).squeeze()
             x_squeezed = self._se_reduce(x_squeezed)
             x_squeezed = self._activ(x_squeezed)
             x_squeezed = self._se_expand(x_squeezed).unsqueeze(-1)
-            if self.verbose: print(self.mode, 'se  {0}x{1}'.format(*x_squeezed.shape[1:]))
             x *= torch.sigmoid(x_squeezed)
         # Pointwise Convolution Phase
         x = self._conv_tail(x)
@@ -302,7 +265,6 @@ class GBlock(pl.LightningModule):
         x = self._dropconnect(x)
         # Skip Connection
         x += identity
-        if self.verbose: print(self.mode, 'out {0}x{1}\n'.format(*x.shape[1:]))
         return x
 
 class GlaucusNet(nn.Module):

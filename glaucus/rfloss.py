@@ -138,7 +138,6 @@ class RFLoss(_Loss):
             spec_apple = self.spec_turbo(apple_cplx, fftsize=fftsize)
             spec_banana = self.spec_turbo(banana_cplx, fftsize=fftsize)
             # comparison does not include phase
-            print(torch.mean((torch.abs(spec_apple)-torch.abs(spec_banana))**2) / fftsize * 2)
             spec_loss += torch.mean((torch.abs(spec_apple)-torch.abs(spec_banana))**2) / fftsize
         return spec_loss * self.spec_scale
 

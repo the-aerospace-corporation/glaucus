@@ -8,13 +8,14 @@ from glaucus import GlaucusAE, FullyConnectedAE
 
 class TestAE(unittest.TestCase):
     def test_ae_roundtrip(self):
-        '''the  output size should be the same as the input size'''
+        '''the  output size should always be the same as the input size'''
         for AE in [GlaucusAE, FullyConnectedAE]:
-            spatial_size = 4096
-            trash_x = torch.randn(32, 2, spatial_size)
-            ae = AE(spatial_size=spatial_size)
-            trash_y, _ = ae(trash_x)
-            self.assertEqual(trash_x.shape, trash_y.shape)
+            for domain in ['time', 'freq']:
+                spatial_size = 4096
+                trash_x = torch.randn(32, 2, spatial_size)
+                ae = AE(spatial_size=spatial_size, domain=domain)
+                trash_y, _ = ae(trash_x)
+                self.assertEqual(trash_x.shape, trash_y.shape)
 
     def test_ae_quantization(self):
         '''If quantization enabled, should use quint8 as latent output'''

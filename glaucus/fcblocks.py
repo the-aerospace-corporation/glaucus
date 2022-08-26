@@ -46,7 +46,7 @@ class FullyConnected(pl.LightningModule):
         for sdx in range(steps+1):
             summary += f'{self.step_sizes[sdx]}{"," * (sdx!=steps)}'
         summary += quantize_out * ',quant'
-        log.error('FullyConnected(%s)', summary)
+        log.info('FullyConnected(%s)', summary)
 
     def _make_fc(self, use_dropout=False):
         '''constructor for stepped architecture'''
