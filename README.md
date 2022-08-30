@@ -1,10 +1,50 @@
 
 
-![Glaucus Atlanticus](https://upload.wikimedia.org/wikipedia/commons/thumb/2/21/Glaucus_atlanticus_1_cropped.jpg/494px-Glaucus_atlanticus_1_cropped.jpg)
+![Glaucus Atlanticus](https://upload.wikimedia.org/wikipedia/commons/thumb/2/21/Glaucus_atlanticus_1_cropped.jpg/247px-Glaucus_atlanticus_1_cropped.jpg)
 
 # Glaucus
 
 Complex-valued encoder, decoder, and loss for RF DSP in PyTorch.
+
+## Using
+
+### Install
+
+* Via PyPI: `pip install glaucus`
+* From source: `pip install .`
+
+### Testing
+
+* `coverage run -a --source=glaucus -m pytest --doctest-modules; coverage html`
+* `pytest .`
+
+### Example
+
+Load quantized model and return compressed signal vector & reconstruction.
+
+```python
+import torch
+import sigmf
+from glaucus import blockgen, GlaucusAE
+
+# create model
+blocks = blockgen()
+model = GlaucusAE(blocks)
+# get weights
+state_dict = torch.hub.load_state_dict_from_url('https://pending-torch-hub-submission/ae-quantized.pth')
+model.load_state_dict(state_dict)
+# prepare for prediction
+model.eval()
+torch.quantization.convert(model.cpu()), inplace=True)
+# get samples into NCL tensor
+x_sigmf = sigmf.sigmffile.fromfile('example.sigmf')
+x_np = x_sigmf.read_samples()
+x_tensor = torch.view_as_real(torch.from_numpy(x_np)).swapaxes(-1, -2).unsqueeze(0)
+# create prediction & quint8 signal vector
+y_tensor, y_encoded = model(x_samples.cuda)
+# get signal vector as uint8
+y_encoded_uint8 = torch.int_repr(y_encoded)
+```
 
 ## Papers
 
