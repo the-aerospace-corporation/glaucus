@@ -172,8 +172,6 @@ class RFLoss(_Loss):
         Envelope Loss
         Computed before normalization!
 
-        TODO: without normalization will be avgpower(a)**2 + avgpower(b)**2
-
         Returns
         -------
         loss : Tensor

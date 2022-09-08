@@ -207,7 +207,7 @@ class GBlock(pl.LightningModule):
         expand_args['stride'] = self.stride
         expand_args['padding'] = self.pad_size
         if self.mode == 'decoder':
-            # tricky deconvolution pad
+            # tricky deconvolution padding required
             expand_args['output_padding'] = self.stride - 1
 
         if self.is_reshaped:
@@ -215,7 +215,7 @@ class GBlock(pl.LightningModule):
             # using as few weights as possible. Large experiment on 2021-12-27
             # determined k=1 was better than attempting to use k=stride
             if self.mode == 'decoder' and self.stride != 1:
-                # tricky deconvolution pad
+                # tricky deconvolution padding
                 reshape_args['output_padding'] = self.stride - 1
             self._reshape = nn.Sequential(
                 Conv1d(self.filters_in, self.filters_out, stride=self.stride, bias=False, kernel_size=1, **reshape_args),

@@ -4,46 +4,66 @@
 
 # Glaucus
 
-Complex-valued encoder, decoder, and loss for RF DSP in PyTorch.
+The Aerospace Corporation is proud to present our complex-valued encoder, decoder, and loss for RF DSP in PyTorch.
 
 ## Using
 
 ### Install
 
-* Via PyPI: `pip install glaucus`
-* From source: `pip install .`
+* via PyPI: `pip install glaucus`
+* via source: `pip install .`
 
 ### Testing
 
 * `coverage run -a --source=glaucus -m pytest --doctest-modules; coverage html`
 * `pytest .`
 
-### Example
+### Use our pre-trained model
 
 Load quantized model and return compressed signal vector & reconstruction.
+Our weights were trained & evaluated on a corpus of 200GB of RF waveforms with
+various added RF impairments for a 40TB training set.
 
 ```python
 import torch
 import sigmf
-from glaucus import blockgen, GlaucusAE
+from glaucus import GlaucusAE
 
 # create model
-blocks = blockgen()
-model = GlaucusAE(blocks)
-# get weights
+model = GlaucusAE(bottleneck_quantize=True)
+model = torch.quantization.prepare(model)
+# get weights for quantized model
 state_dict = torch.hub.load_state_dict_from_url('https://pending-torch-hub-submission/ae-quantized.pth')
 model.load_state_dict(state_dict)
 # prepare for prediction
 model.eval()
-torch.quantization.convert(model.cpu()), inplace=True)
+torch.quantization.convert(model), inplace=True)
 # get samples into NCL tensor
 x_sigmf = sigmf.sigmffile.fromfile('example.sigmf')
 x_np = x_sigmf.read_samples()
 x_tensor = torch.view_as_real(torch.from_numpy(x_np)).swapaxes(-1, -2).unsqueeze(0)
 # create prediction & quint8 signal vector
-y_tensor, y_encoded = model(x_samples.cuda)
+y_tensor, y_encoded = model(x_samples)
 # get signal vector as uint8
 y_encoded_uint8 = torch.int_repr(y_encoded)
+```
+
+### Train model with some RF
+
+```python
+import pytorch_lightning as pl
+from pytorch_lightning.loggers import TensorBoardLogger
+from pytorch_lightning.callbacks import ModelCheckpoint, EarlyStopping
+from glaucus import GlaucusAE
+model = GlaucusAE() # or FullyConnectedAE
+loader = DataModule() # Not provided
+early_stopping_callback = EarlyStopping(monitor='val_loss', mode='min', patience=patience)
+checkpoint_callback = ModelCheckpoint(monitor='val_loss', filename='glaucus-{epoch:03d}-{val_loss:05f}')
+# may want to specify GPUs/TPUs here
+trainer = pl.Trainer(callbacks=[checkpoint_callback, early_stopping_callback])
+trainer.fit(model, loader)
+# rewind to best checkpoint
+model.load_from_checkpoint(trainer.checkpoint_callback.best_model_path, strict=False)
 ```
 
 ## Papers
