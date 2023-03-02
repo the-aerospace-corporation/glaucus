@@ -1,4 +1,8 @@
-'''assure layers are working'''
+'''ensure layers are working'''
+# Copyright 2023 The Aerospace Corporation
+# This file is a part of Glaucus
+# SPDX-License-Identifier: LGPL-3.0-or-later
+
 import unittest
 import numpy as np
 
@@ -11,6 +15,7 @@ from glaucus import (
     GaussianNoise,
     RFLoss,
 )
+
 
 class TestDomainTransforms(unittest.TestCase):
     def test_roundtrip(self):
@@ -37,7 +42,7 @@ class TestNormalization(unittest.TestCase):
         batch_size = np.random.randint(1, 64)
         spatial_size = 2**np.random.randint(8, 16)
         # generate batches with different means and stdevs
-        means = np.geomspace(1e-2, 1e3, 6) * (np.random.randint(0, 2, size=6)*2 - 1)
+        means = np.geomspace(1e-2, 1e3, 6) * (np.random.randint(0, 2, size=6) * 2 - 1)
         stdevs = np.geomspace(1e-2, 1e8, 4)
         layer = RMSNormalize(spatial_size=spatial_size)
         for mean in means:

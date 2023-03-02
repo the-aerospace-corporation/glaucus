@@ -1,7 +1,11 @@
 '''custom layers for pytorch'''
+# Copyright 2023 The Aerospace Corporation
+# This file is a part of Glaucus
+# SPDX-License-Identifier: LGPL-3.0-or-later
+
 import typing
 import torch
-import pytorch_lightning as pl
+import lightning as pl
 
 
 def wrap_ncl(func):
@@ -19,7 +23,7 @@ def wrap_ncl(func):
 
 class RMSNormalizeIQ(pl.LightningModule):
     '''
-    When consuming RF, assure the waveform has uniform scale to regularize input to our architecture.
+    When consuming RF, ensure the waveform has uniform scale to regularize input to our architecture.
     Expects Complex-Valued NL format (batchsize, spatial_size).
 
     Best Method
@@ -110,6 +114,7 @@ class FreqDomain2TimeDomain(pl.LightningModule):
         x = torch.view_as_real(torch.fft.ifft(torch.fft.fftshift(x, dim=-1))).swapaxes(-1, -2)
         return x
 
+
 class DropConnect(pl.LightningModule):
     '''
     drop connections between blocks (alternative to dropout)
@@ -133,7 +138,7 @@ class DropConnect(pl.LightningModule):
     [1] http://yann.lecun.com/exdb/publis/pdf/wan-icml-13.pdf
     [2] https://github.com/tensorflow/tpu/blob/cd433314cc6f38c10a23f1d607a35ba422c8f967/models/official/efficientnet/utils.py#L146
     '''
-    def __init__(self, drop_connect_rate: float = 0.2):
+    def __init__(self, drop_connect_rate:float=0.2):
         super().__init__()
         assert 0 <= drop_connect_rate <= 1, 'drop_connect_rate must be in range of [0, 1]'
         self.survival_rate = 1 - drop_connect_rate
@@ -166,7 +171,7 @@ class GaussianNoise(torch.nn.Module):
     Input should be RMS normalized.
     Returns RMS normalized output.
     '''
-    def __init__(self, spatial_size: int = 4096, min_snr_db: float = -3, max_snr_db: float = 20):
+    def __init__(self, spatial_size:int=4096, min_snr_db:float=-3, max_snr_db: float = 20):
         super().__init__()
         self.min_snr_db = min_snr_db
         self.max_snr_db = max_snr_db

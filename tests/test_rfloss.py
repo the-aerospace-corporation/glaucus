@@ -1,4 +1,8 @@
-'''assure RFLoss is working'''
+'''ensure RFLoss is working'''
+# Copyright 2023 The Aerospace Corporation
+# This file is a part of Glaucus
+# SPDX-License-Identifier: LGPL-3.0-or-later
+
 import unittest
 import torch
 
@@ -6,7 +10,7 @@ from glaucus import RFLoss
 
 
 class TestRFLoss(unittest.TestCase):
-    def _gen_x(self, batch_size=32, spatial_size=4096):
+    def _gen_x(self, batch_size=32, spatial_size=4096) -> None:
         self.alpha = torch.randn(batch_size, 2, spatial_size)
         self.omega = torch.randn(batch_size, 2, spatial_size)
 
@@ -47,10 +51,10 @@ class TestRFLoss(unittest.TestCase):
             # should be around 1 for uncorrelated inputs
             _, metrics = criterion(self.alpha, self.omega)
             self.assertAlmostEqual(metrics['spec_loss'].numpy(), 0.858, places=1)
-            # should be around 0 for equal inputs
+            # should be 0 for equal inputs
             _, metrics = criterion(self.alpha, self.alpha)
             self.assertAlmostEqual(metrics['spec_loss'].numpy(), 0)
-            # should be around 0 for inversely correlated inputs due to absolute value
+            # should be 0 for inversely correlated inputs due to absolute value
             _, metrics = criterion(self.alpha, -self.alpha)
             self.assertAlmostEqual(metrics['spec_loss'].numpy(), 0, places=2)
 

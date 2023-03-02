@@ -24,8 +24,9 @@ setup(
     description='Complex-valued encoder, decoder, and loss for RF DSP in PyTorch.',
     long_description=__doc__,
     install_requires=[
-        'torch',                # basic ML framework
-        'pytorch_lightning',    # extensions for PyTorch
-        'madgrad',              # our favorite optimizer
+        'torch',        # basic ML framework
+        'lightning',    # extensions for PyTorch
+        'madgrad',      # our favorite optimizer
+        'hypothesis',   # best unit testing
     ],
 )

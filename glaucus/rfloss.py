@@ -1,10 +1,14 @@
 '''key components needed for RFLoss'''
+# Copyright 2023 The Aerospace Corporation
+# This file is a part of Glaucus
+# SPDX-License-Identifier: LGPL-3.0-or-later
 
 import torch
 from torch.nn.modules.loss import _Loss
 from torch import Tensor
 
 from .layers import RMSNormalizeIQ
+
 
 class RFLoss(_Loss):
     '''
@@ -14,7 +18,7 @@ class RFLoss(_Loss):
             spatial_size:int=4096,
             weight_spec:float=1, weight_xcor:float=1,
             weight_align:float=1, weight_env:float=1, weight_fft:float=0,
-            size_average=None, reduce=None, reduction:str='mean') -> None:
+            size_average=None, reduce=None, reduction:str='mean', data_format='ncl') -> None:
         '''
         This criterion was the result of a long experimentation phase and
         tries to balance the loss from each component of the calculation.
@@ -32,10 +36,13 @@ class RFLoss(_Loss):
         weight_align: float, default 1
             Metric that emphasizes the importance of the DC alignment, a component of the full xcor.
         weight_env : float, default 1
-            OK metric that assures the scale of inputs w.r.t phase are similar over the observation period.
+            OK metric that ensure the scale of inputs w.r.t phase are similar over the observation period.
             In my experience ML autoencoders learn this quickly then do not improve.
         weight_fft : float, default 0
             This component disabled since it is simply a much worse version of the spectrogram loss.
+        data_format : str, default 'ncl'
+            Network normally consumes and produces complex-valued data represented as real-valued (NCL)
+            but if data is complex-valued (NL) will add a transform layer during encode/decode.
 
         Similarity Metrics
         ------------------
@@ -60,13 +67,14 @@ class RFLoss(_Loss):
           Where `blah = log2(len(ray_apple)`,
           I think appropriate fftsizes are `[2**(blah-2), 2**(blah-1), 2**blah, 2**(blah+1), 2**(blah+2)]`.
           Keep both magnitude and complex portion of error; complex portion hard to figure in early epochs.
-          Assures frequency domain correlation will work at multiple scales.
-        * Normalized Complex Correlation loss assures time domain crosscorrelation will be correct
+          Ensures frequency domain correlation will work at multiple scales.
+        * Normalized Complex Correlation loss ensures time domain crosscorrelation will be correct
         '''
         super().__init__(size_average, reduce, reduction)
 
         spatial_exponent = torch.log2(torch.tensor(spatial_size))
         assert spatial_exponent % 1 == 0, 'RFLoss can only be quickly computed on 2**n length tensors'
+        assert data_format in ['ncl', 'nl']
         self.fftsizes = torch.nn.Parameter(2**(torch.arange(-2, 3, dtype=int) + int(spatial_exponent / 2)), requires_grad=False)
         self.spec_scale = torch.nn.Parameter(torch.tensor(2 / len(self.fftsizes)), requires_grad=False)
         self.spatial_size = torch.nn.Parameter(torch.tensor(2**spatial_exponent), requires_grad=False)
@@ -76,16 +84,18 @@ class RFLoss(_Loss):
         self.weight_env = torch.nn.Parameter(torch.tensor(weight_env), requires_grad=False)
         self.weight_fft = torch.nn.Parameter(torch.tensor(weight_fft), requires_grad=False)
         self._rms = RMSNormalizeIQ(spatial_size=spatial_size)
+        self.data_format = data_format
 
     def __repr__(self):
-        return '{}(spatial_size={}, weights=({:.2f}, {:.2f}, {:.2f}, {:.2f}))'.format(
+        return '{}(fftsizes={}, weights=({:.2f}, {:.2f}, {:.2f}, {:.2f}, {:.2f}), {})'.format(
             type(self).__name__,
-            self.fftsizes[2]**2,
-            self.weight_xcor,
-            self.weight_align,
-            self.weight_spec,
-            self.weight_env,
-            self.weight_fft,
+            '['+' '.join('{}'.format(ffz) for ffz in self.fftsizes)+']',
+            self.weight_xcor.item(),
+            self.weight_align.item(),
+            self.weight_spec.item(),
+            self.weight_env.item(),
+            self.weight_fft.item(),
+            self.data_format.upper(),
         )
 
     @staticmethod
@@ -199,7 +209,10 @@ class RFLoss(_Loss):
 
     def forward(self, apple:Tensor, banana:Tensor) -> Tensor:
         '''
-        Assume complex data in ray is real-valued (batchsize, 2, len) to represent complex-valued data channels first
+        compute loss and metrics
+
+        If initialized with data_format == ncl, assume complex data in ray is
+        real-valued (batchsize, 2, len) to represent complex-valued data channels first
         benchmark: 4096 len is 14 ms using batch_size=64 (223μs per row)
 
         Parameters
@@ -209,8 +222,12 @@ class RFLoss(_Loss):
         banana : torch.Tensor
             See apple.
         '''
-        apple_cplx = torch.view_as_complex(apple.swapaxes(-1, -2).contiguous())
-        banana_cplx = torch.view_as_complex(banana.swapaxes(-1, -2).contiguous())
+        if self.data_format == 'ncl':
+            apple_cplx = torch.view_as_complex(apple.swapaxes(-1, -2).contiguous())
+            banana_cplx = torch.view_as_complex(banana.swapaxes(-1, -2).contiguous())
+        else:
+            apple_cplx = apple
+            banana_cplx = banana
 
         metrics = {}
         total_loss = torch.tensor(0, device=apple.device, dtype=torch.float)

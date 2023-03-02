@@ -4,7 +4,12 @@
 
 # Glaucus
 
-The Aerospace Corporation is proud to present our complex-valued encoder, decoder, and loss for RF DSP in PyTorch.
+The Aerospace Corporation is proud to present our complex-valued encoder,
+decoder, and a new loss function for RF DSP in PyTorch.
+
+## Video (click to play)
+
+[<img src="https://i.vimeocdn.com/video/1583946742-851ad3621192f133ca667bc87f4050276e450fcc721f117bbcd93b67cb0535f8-d_1000">](https://vimeo.com/787670661/ce13da4cd9)
 
 ## Using
 
@@ -18,7 +23,7 @@ The Aerospace Corporation is proud to present our complex-valued encoder, decode
 * `coverage run -a --source=glaucus -m pytest --doctest-modules; coverage html`
 * `pytest .`
 
-### Use our pre-trained model
+### Use pre-trained model with SigMF data
 
 Load quantized model and return compressed signal vector & reconstruction.
 Our weights were trained & evaluated on a corpus of 200GB of RF waveforms with
@@ -30,7 +35,7 @@ import sigmf
 from glaucus import GlaucusAE
 
 # create model
-model = GlaucusAE(bottleneck_quantize=True)
+model = GlaucusAE(bottleneck_quantize=True, data_format='nl')
 model = torch.quantization.prepare(model)
 # get weights for quantized model
 state_dict = torch.hub.load_state_dict_from_url('https://pending-torch-hub-submission/ae-quantized.pth')
@@ -38,10 +43,9 @@ model.load_state_dict(state_dict)
 # prepare for prediction
 model.eval()
 torch.quantization.convert(model), inplace=True)
-# get samples into NCL tensor
+# get samples into NL tensor
 x_sigmf = sigmf.sigmffile.fromfile('example.sigmf')
-x_np = x_sigmf.read_samples()
-x_tensor = torch.view_as_real(torch.from_numpy(x_np)).swapaxes(-1, -2).unsqueeze(0)
+x_tensor = torch.from_numpy(x_sigmf.read_samples())
 # create prediction & quint8 signal vector
 y_tensor, y_encoded = model(x_samples)
 # get signal vector as uint8
@@ -55,7 +59,7 @@ import pytorch_lightning as pl
 from pytorch_lightning.loggers import TensorBoardLogger
 from pytorch_lightning.callbacks import ModelCheckpoint, EarlyStopping
 from glaucus import GlaucusAE
-model = GlaucusAE() # or FullyConnectedAE
+model = GlaucusAE()
 loader = DataModule() # Not provided
 early_stopping_callback = EarlyStopping(monitor='val_loss', mode='min', patience=patience)
 checkpoint_callback = ModelCheckpoint(monitor='val_loss', filename='glaucus-{epoch:03d}-{val_loss:05f}')
@@ -72,13 +76,9 @@ This code is documented by the two following IEEE publications.
 
 ### Glaucus: A Complex-Valued Radio Signal Autoencoder
 
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.5806615.svg)](https://doi.org/10.5281/zenodo.5806615)
-
-A complex-valued autoencoder neural network capable of compressing \& denoising radio frequency (RF) signals with arbitrary model scaling is proposed. Complex-valued time samples received with various impairments are decoded into an embedding vector, then encoded back into complex-valued time samples. The embedding and the related latent space allow search, comparison, and clustering of signals. Traditional signal processing tasks like specific emitter identification, geolocation, or ambiguity estimation can utilize multiple compressed embeddings simultaneously. This paper demonstrates an autoencoder implementation capable of 64x compression hardened against RF channel impairments. The autoencoder allows separate or compound scaling of network depth, width, and resolution to target both embedded and data center deployment with differing resources. The common building block is inspired by the Fused Inverted Residual Block (Fused-MBConv), popularized by EfficientNetV2 \& MobileNetV3, with kernel sizes more appropriate for time-series signal processing
+A complex-valued autoencoder neural network capable of compressing & denoising radio frequency (RF) signals with arbitrary model scaling is proposed. Complex-valued time samples received with various impairments are decoded into an embedding vector, then encoded back into complex-valued time samples. The embedding and the related latent space allow search, comparison, and clustering of signals. Traditional signal processing tasks like specific emitter identification, geolocation, or ambiguity estimation can utilize multiple compressed embeddings simultaneously. This paper demonstrates an autoencoder implementation capable of 64x compression hardened against RF channel impairments. The autoencoder allows separate or compound scaling of network depth, width, and resolution to target both embedded and data center deployment with differing resources. The common building block is inspired by the Fused Inverted Residual Block (Fused-MBConv), popularized by EfficientNetV2 \& MobileNetV3, with kernel sizes more appropriate for time-series signal processing
 
 ### Complex-Valued Radio Signal Loss for Neural Networks
-
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.5806615.svg)](https://doi.org/10.5281/zenodo.5806615)
 
 A new optimized loss for training complex-valued neural networks that require reconstruction of radio signals is proposed. Given a complex-valued time series this method incorporates loss from spectrograms with multiple aspect ratios, cross-correlation loss, and loss from amplitude envelopes in the time \& frequency domains. When training a neural network an optimizer will observe batch loss and backpropagate this value through the network to determine how to update the model parameters. The proposed loss is robust to typical radio impairments and co-channel interference that would explode a naive mean-square-error approach. This robust loss enables higher quality steps along the loss surface which enables training of models specifically designed for impaired radio input. Loss vs channel impairment is shown in comparison to mean-squared error for an ensemble of common channel effects.
 
@@ -107,3 +107,9 @@ alternative license. An alternative license can allow you to create proprietary
 applications around Aerospace products without being required to meet the
 obligations of the GPL. To inquire about an alternative license, please get in
 touch with us at [oss@aero.org](mailto:oss@aero.org).
+
+## To-Do
+
+* insert DOI links once papers are assigned DOI like [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.5806615.svg)](https://doi.org/10.5281/zenodo.5806615)
+* update this readme with published model weight path
+* upload training notebook

@@ -1,10 +1,15 @@
+# Copyright 2023 The Aerospace Corporation
+# This file is a part of Glaucus
+# SPDX-License-Identifier: LGPL-3.0-or-later
+
 import logging
 import numpy as np
 
 import torch
-import pytorch_lightning as pl
+import lightning as pl
 
 log = logging.getLogger(__name__)
+
 
 class FullyConnected(pl.LightningModule):
     '''Sequential Layer Generator for 1D Fully Connected'''
@@ -28,12 +33,13 @@ class FullyConnected(pl.LightningModule):
         self.bn_eps = 1e-3 # better than torch default
 
         # deal with optional quantization
+        if self.quantize_in or self.quantize_out:
+            # 'fbgemm' is for servers, 'qnnpack' is for mobile
+            qconfig = torch.quantization.get_default_qconfig('fbgemm')
         if self.quantize_in:
-            self._dequant_in = torch.quantization.DeQuantStub()
-            # not sure why this has to be set externally, but it does for convert() to work correctly
-            self._dequant_in.qconfig = torch.quantization.get_default_qconfig()
+            self._dequant_in = torch.quantization.DeQuantStub(qconfig=qconfig)
         if self.quantize_out:
-            self._quant_out = torch.quantization.QuantStub(qconfig=torch.quantization.get_default_qconfig())
+            self._quant_out = torch.quantization.QuantStub(qconfig=qconfig)
         if use_dropout:
             self._dropout = torch.nn.Dropout(0.2)
 

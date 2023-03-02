@@ -1,10 +1,14 @@
+# Copyright 2023 The Aerospace Corporation
+# This file is a part of Glaucus
+# SPDX-License-Identifier: LGPL-3.0-or-later
+
 import logging
 import math
 from collections import namedtuple
 import numpy as np
 
 import torch
-import pytorch_lightning as pl
+import lightning as pl
 from torch import nn
 
 from .layers import DropConnect
@@ -93,6 +97,7 @@ def blockgen(
         blocks += [block]
     return blocks
 
+
 # defaults
 ENCODER_BLOCKS = blockgen(steps=6, spatial_in=4096, spatial_out=8, filters_in=2, filters_out=64, mode='encoder')
 DECODER_BLOCKS = blockgen(steps=6, spatial_in=8, spatial_out=4096, filters_in=64, filters_out=2, mode='decoder')
@@ -166,8 +171,9 @@ class GBlock(pl.LightningModule):
     *DANGER* even kernel sizes not quite supported; padding nightmares
     '''
     def __init__(self,
-                 filters_in, filters_out, mode='encoder', stride=1, drop_connect_rate=0.2,
-                 expand_ratio=4, squeeze_ratio=4, kernel_size=7):
+                 filters_in:int, filters_out:int, mode:str='encoder',
+                 stride:int=1, drop_connect_rate:float=0.2,
+                 expand_ratio:int=4, squeeze_ratio:int=4, kernel_size:int=7):
         super().__init__()
         assert mode in ['encoder', 'decoder']
         self.filters_in = filters_in
@@ -252,12 +258,13 @@ class GBlock(pl.LightningModule):
         x = self._bn0(x)
         x = self._activ(x)
         # Squeeze-Excitation Phase
-        if self.squeeze_ratio !=  1:
+        if self.squeeze_ratio != 1:
             x_squeezed = self._avgpool(x).squeeze()
             x_squeezed = self._se_reduce(x_squeezed)
             x_squeezed = self._activ(x_squeezed)
             x_squeezed = self._se_expand(x_squeezed).unsqueeze(-1)
-            x *= torch.sigmoid(x_squeezed)
+            # doing this in-place causes backprop err
+            x = x * torch.sigmoid(x_squeezed)
         # Pointwise Convolution Phase
         x = self._conv_tail(x)
         x = self._bn1(x)
@@ -266,6 +273,7 @@ class GBlock(pl.LightningModule):
         # Skip Connection
         x += identity
         return x
+
 
 class GlaucusNet(nn.Module):
     def __init__(self,
