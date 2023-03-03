@@ -1,5 +1,3 @@
-
-
 ![Glaucus Atlanticus](https://upload.wikimedia.org/wikipedia/commons/thumb/2/21/Glaucus_atlanticus_1_cropped.jpg/247px-Glaucus_atlanticus_1_cropped.jpg)
 
 # Glaucus
@@ -38,11 +36,13 @@ from glaucus import GlaucusAE
 model = GlaucusAE(bottleneck_quantize=True, data_format='nl')
 model = torch.quantization.prepare(model)
 # get weights for quantized model
-state_dict = torch.hub.load_state_dict_from_url('https://pending-torch-hub-submission/ae-quantized.pth')
+state_dict = torch.hub.load_state_dict_from_url(
+    'https://github.com/the-aerospace-corporation/glaucus/releases/download/v1.1.0/glaucus-512-3275-5517642b.pth',
+    map_location='cpu')
 model.load_state_dict(state_dict)
 # prepare for prediction
 model.eval()
-torch.quantization.convert(model), inplace=True)
+torch.quantization.convert(model, inplace=True)
 # get samples into NL tensor
 x_sigmf = sigmf.sigmffile.fromfile('example.sigmf')
 x_tensor = torch.from_numpy(x_sigmf.read_samples())
@@ -52,20 +52,88 @@ y_tensor, y_encoded = model(x_samples)
 y_encoded_uint8 = torch.int_repr(y_encoded)
 ```
 
-### Train model with some RF
+### Pre-trained Model List
+
+| desc      | link                                                                                                                                     | size  | params  | multiadds | provenance                                                    |
+|-----------|------------------------------------------------------------------------------------------------------------------------------------------|-------|---------|-----------|---------------------------------------------------------------|
+| fastest   | [glaucus-512-3275-5517642b](https://github.com/the-aerospace-corporation/glaucus/releases/download/v1.1.0/glaucus-512-3275-5517642b.pth) | 8.5 M | 2.030 M | 259 M     | .009 pfs-days on modulation-only Aerospace DSet               |
+| accurate  | [glaucus-1024-761-c49063fd](https://github.com/the-aerospace-corporation/glaucus/releases/download/v1.1.0/glaucus-1024-761-c49063fd.pth) | 11 M  | 2.873 M | 380 M     | .035 pfs-days modulation & general waveform Aerospace Dset    |
+| -pending- |                                                                                                                                          | 11 M  | 2.873 M | 380 M     | transfer learning from glaucus-1024-761-c49063fd w/Sig53 Dset |
+
+#### Note on pfs-days
+
+Per [OpenAI appendix](https://openai.com/blog/ai-and-compute/#appendixmethods) here is the correct math (method 1):
+
+* `pfs_days` = (add-multiplies per forward pass) * (2 FLOPs/add-multiply) * (3 for forward and backward pass) * (number of examples in dataset) * (number of epochs) / (flop per petaflop) / (seconds per day)
+* (number of examples in dataset) * (number of epochs) = steps * batchsize
+* 1 `pfs-day` ≈ (8x V100 GPUs at 100% efficiency for 1 day) ≈ (100x GTX1080s at 100% efficiency for 1 day) ≈ (35x GTX 2080s at 100% efficiency for 1 day) ≈ [500 kWh](https://twitter.com/id_aa_carmack/status/1192513743974019072)
+
+### Get loss between two RF signals
 
 ```python
-import pytorch_lightning as pl
-from pytorch_lightning.loggers import TensorBoardLogger
-from pytorch_lightning.callbacks import ModelCheckpoint, EarlyStopping
+import np
+import torch
+import glaucus
+
+# create criterion
+loss = glaucus.RFLoss(spatial_size=128, data_format='nl')
+
+# create some signal
+xxx = torch.randn(128, dtype=torch.complex64)
+# alter signal with 1% freq offset
+yyy = xxx * np.exp(1j * 2 * np.pi * 0.01 * np.arange(128))
+
+# return loss
+loss(xxx, yyy)
+```
+
+### Train model with TorchSig
+
+*partially implemented pending update or replace with notebook example*
+
+```python
+import lightning as pl
 from glaucus import GlaucusAE
-model = GlaucusAE()
-loader = DataModule() # Not provided
-early_stopping_callback = EarlyStopping(monitor='val_loss', mode='min', patience=patience)
-checkpoint_callback = ModelCheckpoint(monitor='val_loss', filename='glaucus-{epoch:03d}-{val_loss:05f}')
-# may want to specify GPUs/TPUs here
-trainer = pl.Trainer(callbacks=[checkpoint_callback, early_stopping_callback])
+
+model = GlaucusAE(data_format='nl')
+
+# this takes a very long time if no cache is available
+signal_data = torchsig.datasets.Sig53(root=str(cache_path))
+# 80 / 10 / 10 split
+train_dataset, val_dataset, test_dataset = torch.utils.data.random_split(
+    signal_data,
+    (len(signal_data)*np.array([0.8, 0.1, 0.1])).astype(int),
+    generator=torch.Generator().manual_seed(0xcab005e)
+)
+class RFDataModule(pl.LightningDataModule):
+    '''
+    defines the dataloaders for train, val, test and uses datasets
+    '''
+    def __init__(self, train_dataset=None, val_dataset=None, test_dataset=None,
+                 num_workers=16, batch_size=32):
+        super().__init__()
+        self.batch_size = batch_size
+        self.num_workers = num_workers
+        self.train_dataset = train_dataset
+        self.val_dataset = val_dataset
+        self.test_dataset = test_dataset
+
+    def train_dataloader(self):
+        return DataLoader(self.train_dataset, num_workers=self.num_workers, batch_size=self.batch_size, shuffle=True, pin_memory=True)
+    def val_dataloader(self):
+        return DataLoader(self.val_dataset, num_workers=self.num_workers, batch_size=self.batch_size, shuffle=False, pin_memory=True)
+    def test_dataloader(self):
+        return DataLoader(self.test_dataset, num_workers=self.num_workers, batch_size=self.batch_size, shuffle=False, pin_memory=True)
+
+loader = RFDataModule(
+    train_dataset=train_dataset,
+    val_dataset=val_dataset,
+    test_dataset=test_dataset,
+    batch_size=batch_size, num_workers=num_workers)
+
+trainer = pl.Trainer()
 trainer.fit(model, loader)
+
 # rewind to best checkpoint
 model.load_from_checkpoint(trainer.checkpoint_callback.best_model_path, strict=False)
 ```

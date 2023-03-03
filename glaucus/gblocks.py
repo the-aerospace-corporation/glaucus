@@ -185,7 +185,7 @@ class GBlock(pl.LightningModule):
         self.bn_mom = 1e-2 # better than torch default
         self.bn_eps = 1e-3 # better than torch default
         self.filters_ex = self.filters_in * self.expand_ratio
-        self.filters_sq = max(1, round(self.filters_ex / self.squeeze_ratio))
+        self.filters_sq = int(max(1, round(self.filters_ex / self.squeeze_ratio)))
         self.is_reshaped = self.filters_in != self.filters_out or self.stride != 1
         self.kernel_size = kernel_size
         if kernel_size % 2 == 1:
