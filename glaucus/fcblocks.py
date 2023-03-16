@@ -13,8 +13,15 @@ log = logging.getLogger(__name__)
 
 class FullyConnected(pl.LightningModule):
     '''Sequential Layer Generator for 1D Fully Connected'''
-    def __init__(self, size_in:int=512, size_out:int=128, steps:int=3,
-                 quantize_in:bool=False, quantize_out:bool=False, use_dropout:bool=False) -> None:
+    def __init__(
+        self,
+        size_in: int = 512,
+        size_out: int = 128,
+        steps: int = 3,
+        quantize_in: bool = False,
+        quantize_out: bool = False,
+        use_dropout: bool = False,
+    ) -> None:
         '''
         Smartly construct fully connected of arbitrary depth
 
@@ -54,7 +61,7 @@ class FullyConnected(pl.LightningModule):
         summary += quantize_out * ',quant'
         log.info('FullyConnected(%s)', summary)
 
-    def _make_fc(self, use_dropout=False):
+    def _make_fc(self, use_dropout:bool=False):
         '''constructor for stepped architecture'''
         layers = []
         if self.quantize_in:

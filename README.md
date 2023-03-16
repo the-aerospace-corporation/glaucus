@@ -24,8 +24,8 @@ decoder, and a new loss function for RF DSP in PyTorch.
 ### Use pre-trained model with SigMF data
 
 Load quantized model and return compressed signal vector & reconstruction.
-Our weights were trained & evaluated on a corpus of 200GB of RF waveforms with
-various added RF impairments for a 40TB training set.
+Our weights were trained & evaluated on a corpus of 200 GB of RF waveforms with
+various added RF impairments for a 1 PB training set.
 
 ```python
 import torch
@@ -52,21 +52,24 @@ y_tensor, y_encoded = model(x_samples)
 y_encoded_uint8 = torch.int_repr(y_encoded)
 ```
 
-### Pre-trained Model List
+#### Higher-accuracy pre-trained model
+```python
+# define architecture
+import torch
+from glaucus import blockgen, GlaucusAE
 
-| desc      | link                                                                                                                                     | size  | params  | multiadds | provenance                                                    |
-|-----------|------------------------------------------------------------------------------------------------------------------------------------------|-------|---------|-----------|---------------------------------------------------------------|
-| fastest   | [glaucus-512-3275-5517642b](https://github.com/the-aerospace-corporation/glaucus/releases/download/v1.1.0/glaucus-512-3275-5517642b.pth) | 8.5 M | 2.030 M | 259 M     | .009 pfs-days on modulation-only Aerospace DSet               |
-| accurate  | [glaucus-1024-761-c49063fd](https://github.com/the-aerospace-corporation/glaucus/releases/download/v1.1.0/glaucus-1024-761-c49063fd.pth) | 11 M  | 2.873 M | 380 M     | .035 pfs-days modulation & general waveform Aerospace Dset    |
-| -pending- |                                                                                                                                          | 11 M  | 2.873 M | 380 M     | transfer learning from glaucus-1024-761-c49063fd w/Sig53 Dset |
-
-#### Note on pfs-days
-
-Per [OpenAI appendix](https://openai.com/blog/ai-and-compute/#appendixmethods) here is the correct math (method 1):
-
-* `pfs_days` = (add-multiplies per forward pass) * (2 FLOPs/add-multiply) * (3 for forward and backward pass) * (number of examples in dataset) * (number of epochs) / (flop per petaflop) / (seconds per day)
-* (number of examples in dataset) * (number of epochs) = steps * batchsize
-* 1 `pfs-day` ≈ (8x V100 GPUs at 100% efficiency for 1 day) ≈ (100x GTX1080s at 100% efficiency for 1 day) ≈ (35x GTX 2080s at 100% efficiency for 1 day) ≈ [500 kWh](https://twitter.com/id_aa_carmack/status/1192513743974019072)
+encoder_blocks = blockgen(steps=6, spatial_in=4096, spatial_out=16, filters_in=2, filters_out=64, mode='encoder')
+decoder_blocks = blockgen(steps=6, spatial_in=16, spatial_out=4096, filters_in=64, filters_out=2, mode='decoder')
+# create model
+model = GlaucusAE(encoder_blocks, decoder_blocks, bottleneck_in=1024, bottleneck_out=1024, bottleneck_quantize=True, data_format='nl')
+model = torch.quantization.prepare(model)
+# get weights for quantized model
+state_dict = torch.hub.load_state_dict_from_url(
+    'https://github.com/the-aerospace-corporation/glaucus/releases/download/v1.1.0/glaucus-1024-761-c49063fd.pth',
+    map_location='cpu')
+model.load_state_dict(state_dict)
+# see above for rest
+```
 
 ### Get loss between two RF signals
 
@@ -138,6 +141,22 @@ trainer.fit(model, loader)
 model.load_from_checkpoint(trainer.checkpoint_callback.best_model_path, strict=False)
 ```
 
+## Pre-trained Model List
+
+| desc      | link                                                                                                                                     | size (MB) | params (M) | multiadds (M) | provenance                                                    |
+|-----------|------------------------------------------------------------------------------------------------------------------------------------------|-----------|------------|---------------|---------------------------------------------------------------|
+| fastest   | [glaucus-512-3275-5517642b](https://github.com/the-aerospace-corporation/glaucus/releases/download/v1.1.0/glaucus-512-3275-5517642b.pth) | 8.5       | 2.030 M    | 259           | .009 pfs-days on modulation-only Aerospace DSet               |
+| accurate  | [glaucus-1024-761-c49063fd](https://github.com/the-aerospace-corporation/glaucus/releases/download/v1.1.0/glaucus-1024-761-c49063fd.pth) | 11        | 2.873 M    | 380           | .035 pfs-days modulation & general waveform Aerospace Dset    |
+| -pending- |                                                                                                                                          | 8.5       | 2.030      | 380           | transfer learning from glaucus-1024-761-c49063fd w/Sig53 Dset |
+
+### Note on pfs-days
+
+Per [OpenAI appendix](https://openai.com/blog/ai-and-compute/#appendixmethods) here is the correct math (method 1):
+
+* `pfs_days` = (add-multiplies per forward pass) * (2 FLOPs/add-multiply) * (3 for forward and backward pass) * (number of examples in dataset) * (number of epochs) / (flop per petaflop) / (seconds per day)
+* (number of examples in dataset) * (number of epochs) = steps * batchsize
+* 1 `pfs-day` ≈ (8x V100 GPUs at 100% efficiency for 1 day) ≈ (100x GTX1080s at 100% efficiency for 1 day) ≈ (35x GTX 2080s at 100% efficiency for 1 day) ≈ [500 kWh](https://twitter.com/id_aa_carmack/status/1192513743974019072)
+
 ## Papers
 
 This code is documented by the two following IEEE publications.
@@ -178,6 +197,8 @@ touch with us at [oss@aero.org](mailto:oss@aero.org).
 
 ## To-Do
 
-* insert DOI links once papers are assigned DOI like [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.5806615.svg)](https://doi.org/10.5281/zenodo.5806615)
-* update this readme with published model weight path
+* once DOI assigned to papers
+    * insert DOI links like [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.5806615.svg)](https://doi.org/10.5281/zenodo.5806615)
+    * update `CITATION.cff`
+* allow `pretrained_weights` during model init
 * upload training notebook

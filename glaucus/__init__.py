@@ -2,7 +2,7 @@
 # This file is a part of Glaucus
 # SPDX-License-Identifier: LGPL-3.0-or-later
 
-__version__ = '1.1.1'
+__version__ = '1.1.2'
 
 from .rfloss import *
 from .layers import *

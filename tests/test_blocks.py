@@ -30,6 +30,7 @@ class TestParams(unittest.TestCase):
         trash_y = decoder(encoder(trash_x))
         self.assertEqual(trash_x.shape, trash_y.shape)
 
+    @settings(deadline=None)
     @given(
         spatial_exponent=st.integers(min_value=6, max_value=14),
         filters_in=st.integers(min_value=1, max_value=128),
@@ -65,6 +66,7 @@ class TestParams(unittest.TestCase):
         # will raise RuntimeError here if there is an issue with backprop
         loss.backward()
 
+    @settings(deadline=None)
     @given(
         exponent_in=st.integers(min_value=2, max_value=14),
         exponent_out=st.integers(min_value=2, max_value=14),

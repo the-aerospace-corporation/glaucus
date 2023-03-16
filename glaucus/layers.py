@@ -171,7 +171,7 @@ class GaussianNoise(torch.nn.Module):
     Input should be RMS normalized.
     Returns RMS normalized output.
     '''
-    def __init__(self, spatial_size:int=4096, min_snr_db:float=-3, max_snr_db: float = 20):
+    def __init__(self, spatial_size:int=4096, min_snr_db:float=-3, max_snr_db:float=20):
         super().__init__()
         self.min_snr_db = min_snr_db
         self.max_snr_db = max_snr_db

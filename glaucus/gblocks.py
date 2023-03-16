@@ -15,16 +15,21 @@ from .layers import DropConnect
 
 log = logging.getLogger(__name__)
 
-# BlockArgs are used to specify a Glaucus architecture, which is thankfully generated smartly by `blockgen`.
+# BlockArgs are used to specify a Glaucus architecture, which is thankfully generated smartly by `blockgen`
 BlockArgs = namedtuple('BlockArgs', [
     'num_repeat', 'kernel_size', 'stride', 'filters_in', 'filters_out', 'expand_ratio', 'squeeze_ratio'])
 
 
 def blockgen(
-        spatial_in:int=4096, spatial_out:int=8,
-        filters_in:int=2, filters_out:int=64,
-        expand_ratio:int=4, squeeze_ratio:int=4,
-        steps:int=6, mode:str='encoder'):
+        spatial_in: int = 4096,
+        spatial_out: int = 8,
+        filters_in: int = 2,
+        filters_out: int = 64,
+        expand_ratio: int = 4,
+        squeeze_ratio: int = 4,
+        steps: int = 6,
+        mode: str = 'encoder',
+    ) -> list:
     '''
     smartly generate block sequence
 
@@ -170,10 +175,17 @@ class GBlock(pl.LightningModule):
 
     *DANGER* even kernel sizes not quite supported; padding nightmares
     '''
-    def __init__(self,
-                 filters_in:int, filters_out:int, mode:str='encoder',
-                 stride:int=1, drop_connect_rate:float=0.2,
-                 expand_ratio:int=4, squeeze_ratio:int=4, kernel_size:int=7):
+    def __init__(
+            self,
+            filters_in: int,
+            filters_out: int,
+            mode: str = 'encoder',
+            stride: int = 1,
+            drop_connect_rate: float = 0.2,
+            expand_ratio: int = 4,
+            squeeze_ratio: int = 4,
+            kernel_size: int = 7,
+        ) -> None:
         super().__init__()
         assert mode in ['encoder', 'decoder']
         self.filters_in = filters_in
@@ -276,10 +288,14 @@ class GBlock(pl.LightningModule):
 
 
 class GlaucusNet(nn.Module):
-    def __init__(self,
-                 blocks=ENCODER_BLOCKS, mode:str='encoder',
-                 width_coef:float=1.0, depth_coef:float=1.0,
-                 spatial_dim:int=4096, drop_connect_rate:float=0.2,
+    def __init__(
+            self,
+            blocks = ENCODER_BLOCKS,
+            mode: str = 'encoder',
+            width_coef: float = 1.0,
+            depth_coef: float = 1.0,
+            spatial_dim: int = 4096,
+            drop_connect_rate: float = 0.2,
         ) -> None:
         super().__init__()
         assert isinstance(blocks, list), 'should be list of BlockArgs'

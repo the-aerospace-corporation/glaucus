@@ -18,12 +18,24 @@ log = logging.getLogger(__name__)
 
 class GlaucusAE(pl.LightningModule):
     '''RF Autoencoder constructed with network of GBlocks.'''
-    def __init__(self, encoder_blocks=ENCODER_BLOCKS, decoder_blocks=DECODER_BLOCKS,
-            domain:str='time', width_coef:float=1, depth_coef:float=1, spatial_size:int=4096,
-            bottleneck_in:int=512, bottleneck_latent:int=512, bottleneck_out:int=512,
-            bottleneck_steps:int=1, bottleneck_quantize:bool=False, data_format:str='ncl',
-            drop_connect_rate:float=0.2, optimizer:str='madgrad', lr:float=1e-3,
-            ) -> None:
+    def __init__(
+        self,
+        encoder_blocks: list = ENCODER_BLOCKS,
+        decoder_blocks: list = DECODER_BLOCKS,
+        domain: str = 'time',
+        width_coef: float = 1,
+        depth_coef: float = 1,
+        spatial_size: int = 4096,
+        bottleneck_in: int = 512,
+        bottleneck_latent: int = 512,
+        bottleneck_out: int = 512,
+        bottleneck_steps: int = 1,
+        bottleneck_quantize: bool = False,
+        data_format: str = 'ncl',
+        drop_connect_rate: float = 0.2,
+        optimizer: str = 'madgrad',
+        lr: float = 1e-3,
+    ) -> None:
         '''
         encoder_blocks : list of namedtuple, optional
             Parameters to define sequential neural net architecture. Note that encoder output shape should be compatible
@@ -103,7 +115,7 @@ class GlaucusAE(pl.LightningModule):
     def encode(self, x):
         '''normalize, add noise if training, and reduce to latent domain'''
         if self.data_format == 'nl':
-            x = torch.view_as_real(x).swapaxes(-1,-2)
+            x = torch.view_as_real(x).swapaxes(-1, -2)
         x = self._rms_norm(x)
         x, _ = self._noise_layer(x)
         if self.domain == 'freq':
@@ -121,7 +133,7 @@ class GlaucusAE(pl.LightningModule):
             # convert back to time domain
             x_hat = self._freq2time(x_hat)
         if self.data_format == 'nl':
-            x_hat = torch.view_as_complex(x_hat.swapaxes(-1,-2).contiguous())
+            x_hat = torch.view_as_complex(x_hat.swapaxes(-1, -2).contiguous())
         return x_hat
 
     def step(self, batch, batch_idx):
@@ -152,9 +164,17 @@ class GlaucusAE(pl.LightningModule):
 
 class FullyConnectedAE(pl.LightningModule):
     '''RF Autoencoder constructed with fully connected layers.'''
-    def __init__(self,
-        spatial_size:int=4096, latent_dim:int=512, lr:float=1e-3, steps:int=3, bottleneck_quantize:bool=False,
-        domain:str='time', data_format:str='ncl', optimizer:str='madgrad') -> None:
+    def __init__(
+        self,
+        spatial_size: int = 4096,
+        latent_dim: int = 512,
+        lr: float = 1e-3,
+        steps: int = 3,
+        bottleneck_quantize: bool = False,
+        domain: str = 'time',
+        data_format: str = 'ncl',
+        optimizer: str = 'madgrad',
+    ) -> None:
         super().__init__()
         self.save_hyperparameters()
         self.lr = lr
