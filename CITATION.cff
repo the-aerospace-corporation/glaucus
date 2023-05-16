@@ -2,15 +2,28 @@
 # Visit https://bit.ly/cffinit to generate yours today!
 
 cff-version: 1.2.0
-title: >-
-  Complex-Valued Radio Signal Loss for Neural
-  Networks
-message: Please cite this software using these metadata.
+title: Glaucus
+message: >-
+  The Aerospace Corporation is proud to present our
+  complex-valued encoder, decoder, and a new loss function
+  for RF DSP in PyTorch.
 type: software
 authors:
   - given-names: Kye Logue
     email: kyle.logue@aero.org
     affiliation: The Aerospace Corporation
-repository-code: >-
-  https://github.com/the-aerospace-corporation/glaucus
+identifiers:
+  - type: doi
+    value: 10.1109/AERO55745.2023.10115599
+    description: 'Glaucus: A Complex-Valued Radio Signal Autoencoder'
+  - type: doi
+    value: 10.1109/AERO55745.2023.10116006
+    description: Complex-Valued Radio Signal Loss for Neural Networks
+repository-code: 'https://github.com/the-aerospace-corporation/glaucus'
+keywords:
+  - sigint
+  - dsp
+  - autoencoder
+  - pytorch
+  - rf
 license: LGPL-3.0+

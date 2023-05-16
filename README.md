@@ -143,11 +143,11 @@ model.load_from_checkpoint(trainer.checkpoint_callback.best_model_path, strict=F
 
 ## Pre-trained Model List
 
-| desc      | link                                                                                                                                     | size (MB) | params (M) | multiadds (M) | provenance                                                    |
-|-----------|------------------------------------------------------------------------------------------------------------------------------------------|-----------|------------|---------------|---------------------------------------------------------------|
-| fastest   | [glaucus-512-3275-5517642b](https://github.com/the-aerospace-corporation/glaucus/releases/download/v1.1.0/glaucus-512-3275-5517642b.pth) | 8.5       | 2.030 M    | 259           | .009 pfs-days on modulation-only Aerospace DSet               |
-| accurate  | [glaucus-1024-761-c49063fd](https://github.com/the-aerospace-corporation/glaucus/releases/download/v1.1.0/glaucus-1024-761-c49063fd.pth) | 11        | 2.873 M    | 380           | .035 pfs-days modulation & general waveform Aerospace Dset    |
-| -pending- |                                                                                                                                          | 8.5       | 2.030      | 380           | transfer learning from glaucus-1024-761-c49063fd w/Sig53 Dset |
+| desc     | link                                                                                                                                                   | size (MB) | params (M) | multiadds (M) | provenance                                                    |
+|----------|--------------------------------------------------------------------------------------------------------------------------------------------------------|-----------|------------|---------------|---------------------------------------------------------------|
+| small    | [glaucus-512-3275-5517642b](https://github.com/the-aerospace-corporation/glaucus/releases/download/v1.1.0/glaucus-512-3275-5517642b.pth)               | 8.5       | 2.030      | 259           | .009 pfs-days on modulation-only Aerospace DSet               |
+| accurate | [glaucus-1024-761-c49063fd](https://github.com/the-aerospace-corporation/glaucus/releases/download/v1.1.0/glaucus-1024-761-c49063fd.pth)               | 11        | 2.873      | 380           | .035 pfs-days modulation & general waveform Aerospace Dset    |
+| sig53    | [glaucus-1024-sig53TLe37-2956bcb6](https://github.com/the-aerospace-corporation/glaucus/releases/download/v1.1.3/glaucus-1024-sig53TLe37-2956bcb6.pth) | 11        | 2.873      | 380           | transfer learning from glaucus-1024-761-c49063fd w/Sig53 Dset |
 
 ### Note on pfs-days
 
@@ -162,10 +162,12 @@ Per [OpenAI appendix](https://openai.com/blog/ai-and-compute/#appendixmethods) h
 This code is documented by the two following IEEE publications.
 
 ### Glaucus: A Complex-Valued Radio Signal Autoencoder
+[![DOI](https://zenodo.org/badge/DOI/10.1109/AERO55745.2023.10115599.svg)](https://doi.org/10.1109/AERO55745.2023.10115599)
 
 A complex-valued autoencoder neural network capable of compressing & denoising radio frequency (RF) signals with arbitrary model scaling is proposed. Complex-valued time samples received with various impairments are decoded into an embedding vector, then encoded back into complex-valued time samples. The embedding and the related latent space allow search, comparison, and clustering of signals. Traditional signal processing tasks like specific emitter identification, geolocation, or ambiguity estimation can utilize multiple compressed embeddings simultaneously. This paper demonstrates an autoencoder implementation capable of 64x compression hardened against RF channel impairments. The autoencoder allows separate or compound scaling of network depth, width, and resolution to target both embedded and data center deployment with differing resources. The common building block is inspired by the Fused Inverted Residual Block (Fused-MBConv), popularized by EfficientNetV2 \& MobileNetV3, with kernel sizes more appropriate for time-series signal processing
 
 ### Complex-Valued Radio Signal Loss for Neural Networks
+[![DOI](https://zenodo.org/badge/DOI/10.1109/AERO55745.2023.10116006.svg)](https://doi.org/10.1109/AERO55745.2023.10116006)
 
 A new optimized loss for training complex-valued neural networks that require reconstruction of radio signals is proposed. Given a complex-valued time series this method incorporates loss from spectrograms with multiple aspect ratios, cross-correlation loss, and loss from amplitude envelopes in the time \& frequency domains. When training a neural network an optimizer will observe batch loss and backpropagate this value through the network to determine how to update the model parameters. The proposed loss is robust to typical radio impairments and co-channel interference that would explode a naive mean-square-error approach. This robust loss enables higher quality steps along the loss surface which enables training of models specifically designed for impaired radio input. Loss vs channel impairment is shown in comparison to mean-squared error for an ensemble of common channel effects.
 
@@ -197,8 +199,5 @@ touch with us at [oss@aero.org](mailto:oss@aero.org).
 
 ## To-Do
 
-* once DOI assigned to papers
-    * insert DOI links like [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.5806615.svg)](https://doi.org/10.5281/zenodo.5806615)
-    * update `CITATION.cff`
 * allow `pretrained_weights` during model init
-* upload training notebook
+* add training notebook and colab example
