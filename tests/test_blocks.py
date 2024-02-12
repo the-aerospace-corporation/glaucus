@@ -1,4 +1,4 @@
-'''ensure blocks are working'''
+"""ensure blocks are working"""
 # Copyright 2023 The Aerospace Corporation
 # This file is a part of Glaucus
 # SPDX-License-Identifier: LGPL-3.0-or-later
@@ -7,11 +7,12 @@ import unittest
 import torch
 from hypothesis import settings, given, strategies as st
 
-from glaucus import GlaucusNet, blockgen, FullyConnected, GBlock
+from glaucus import FullyConnected, GBlock, GlaucusNet, blockgen
 
 
 class TestParams(unittest.TestCase):
-    '''autoencoders should operate over all valid params'''
+    """autoencoders should operate over all valid params"""
+
     @settings(deadline=None, max_examples=100)
     @given(
         exponent=st.integers(min_value=2, max_value=14),
@@ -19,13 +20,13 @@ class TestParams(unittest.TestCase):
         filters_mid=st.integers(min_value=1, max_value=100)
     )
     def test_io_glaucusnet(self, exponent, steps, filters_mid):
-        '''design works on a variety of spatial sizes'''
+        """design works on a variety of spatial sizes"""
         spatial_dim = 2**exponent
         # for spatial_dim in 2**np.arange(8, 14):
-        encoder_blocks = blockgen(steps=steps, spatial_in=spatial_dim, spatial_out=8, filters_in=2, filters_out=filters_mid, mode='encoder')
-        decoder_blocks = blockgen(steps=steps, spatial_in=8, spatial_out=spatial_dim, filters_in=filters_mid, filters_out=2, mode='decoder')
-        encoder = GlaucusNet(mode='encoder', blocks=encoder_blocks, spatial_dim=spatial_dim)
-        decoder = GlaucusNet(mode='decoder', blocks=decoder_blocks, spatial_dim=spatial_dim)
+        encoder_blocks = blockgen(steps=steps, spatial_in=spatial_dim, spatial_out=8, filters_in=2, filters_out=filters_mid, mode="encoder")
+        decoder_blocks = blockgen(steps=steps, spatial_in=8, spatial_out=spatial_dim, filters_in=filters_mid, filters_out=2, mode="decoder")
+        encoder = GlaucusNet(mode="encoder", blocks=encoder_blocks, spatial_dim=spatial_dim)
+        decoder = GlaucusNet(mode="decoder", blocks=decoder_blocks, spatial_dim=spatial_dim)
         trash_x = torch.randn(3, 2, spatial_dim)
         trash_y = decoder(encoder(trash_x))
         self.assertEqual(trash_x.shape, trash_y.shape)
@@ -53,9 +54,7 @@ class TestParams(unittest.TestCase):
             squeeze_ratio -= 1
         squeeze_ratio = max(filters_in * expand_ratio, squeeze_ratio)
         blk = GBlock(
-            filters_in=filters_in, filters_out=filters_out,
-            stride=stride, kernel_size=kernel_size,
-            expand_ratio=expand_ratio, squeeze_ratio=squeeze_ratio
+            filters_in=filters_in, filters_out=filters_out, stride=stride, kernel_size=kernel_size, expand_ratio=expand_ratio, squeeze_ratio=squeeze_ratio
         )
         trash_x = torch.randn(2, filters_in, spatial_size)
         trash_y = blk(trash_x)
@@ -71,16 +70,14 @@ class TestParams(unittest.TestCase):
         exponent_in=st.integers(min_value=2, max_value=14),
         exponent_out=st.integers(min_value=2, max_value=14),
         steps=st.integers(min_value=1, max_value=5),
-        quantize_in=st.booleans(), quantize_out=st.booleans(),
-        use_dropout=st.booleans()
+        quantize_in=st.booleans(),
+        quantize_out=st.booleans(),
+        use_dropout=st.booleans(),
     )
     def test_io_fc(self, exponent_in, exponent_out, steps, quantize_in, quantize_out, use_dropout):
-        '''block should work with a variety of configs'''
+        """block should work with a variety of configs"""
         size_in, size_out = exponent_in**2, exponent_out**2
-        autoencoder = FullyConnected(
-            size_in=size_in, size_out=size_out,
-            steps=steps, quantize_in=quantize_in, quantize_out=quantize_out
-        )
+        autoencoder = FullyConnected(size_in=size_in, size_out=size_out, steps=steps, quantize_in=quantize_in, quantize_out=quantize_out)
         trash_x = torch.randn(3, size_in)
         trash_y = autoencoder(trash_x)
         self.assertEqual(trash_y.shape[1], size_out)

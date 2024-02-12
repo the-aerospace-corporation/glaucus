@@ -1,4 +1,4 @@
-'''ensure autoencoders are working'''
+"""ensure autoencoders are working"""
 # Copyright 2023 The Aerospace Corporation
 # This file is a part of Glaucus
 # SPDX-License-Identifier: LGPL-3.0-or-later
@@ -6,18 +6,18 @@
 import unittest
 import torch
 
-from glaucus import GlaucusAE, FullyConnectedAE
+from glaucus import FullyConnectedAE, GlaucusAE
 
 
 class TestAE(unittest.TestCase):
     def test_ae_roundtrip(self):
-        '''the  output size should always be the same as the input size'''
+        """the  output size should always be the same as the input size"""
         for AE in [GlaucusAE, FullyConnectedAE]:
-            for data_format in ['ncl', 'nl']:
-                for domain in ['time', 'freq']:
+            for data_format in ["ncl", "nl"]:
+                for domain in ["time", "freq"]:
                     # note if we use a diff spatial_size, will need to gen new encoder & decoder bocks
                     spatial_size = 4096
-                    if data_format == 'ncl':
+                    if data_format == "ncl":
                         trash_x = torch.randn(7, 2, spatial_size)
                     else:
                         trash_x = torch.randn(7, spatial_size, dtype=torch.complex64)
@@ -26,14 +26,14 @@ class TestAE(unittest.TestCase):
                     self.assertEqual(trash_x.shape, trash_y.shape)
 
     def test_ae_quantization(self):
-        '''If quantization enabled, should use quint8 as latent output'''
+        """If quantization enabled, should use quint8 as latent output"""
         for AE in [FullyConnectedAE, GlaucusAE]:
-            for data_format in ['ncl', 'nl']:
+            for data_format in ["ncl", "nl"]:
                 for is_quantized in [True, False]:
                     target = torch.quint8 if is_quantized else torch.float32
                     # note if we use a diff spatial_size, will need to gen new encoder & decoder bocks
                     spatial_size = 4096
-                    if data_format == 'ncl':
+                    if data_format == "ncl":
                         trash_x = torch.randn(7, 2, spatial_size)
                     else:
                         trash_x = torch.randn(7, spatial_size, dtype=torch.complex64)
@@ -47,13 +47,13 @@ class TestAE(unittest.TestCase):
                     self.assertEqual(trash_latent.dtype, target)
 
     def test_ae_backprop(self):
-        '''catch errors during backpropagation'''
-        for data_format in ['ncl', 'nl']:
+        """catch errors during backpropagation"""
+        for data_format in ["ncl", "nl"]:
             for AE in [FullyConnectedAE, GlaucusAE]:
                 for is_quantized in [True, False]:
                     # note if we use a diff spatial_size, will need to gen new encoder & decoder bocks
                     spatial_size = 4096
-                    if data_format == 'ncl':
+                    if data_format == "ncl":
                         trash_x = torch.randn(7, 2, spatial_size)
                     else:
                         trash_x = torch.randn(7, spatial_size, dtype=torch.complex64)

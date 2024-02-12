@@ -1,11 +1,10 @@
-'''ensure layers are working'''
+"""ensure layers are working"""
 # Copyright 2023 The Aerospace Corporation
 # This file is a part of Glaucus
 # SPDX-License-Identifier: LGPL-3.0-or-later
 
 import unittest
 import numpy as np
-
 import torch
 
 from glaucus import (
@@ -19,12 +18,12 @@ from glaucus import (
 
 class TestDomainTransforms(unittest.TestCase):
     def test_roundtrip(self):
-        '''
+        """
         Time -> Freq -> Time should yield identical results
         Freq -> Time -> Freq should yield identical results
-        '''
+        """
         batch_size = np.random.randint(0, 64)
-        spatial_size = 2**np.random.randint(8, 16)
+        spatial_size = 2 ** np.random.randint(8, 16)
         original = torch.rand(batch_size, 2, spatial_size)
         layer_f2t = FreqDomain2TimeDomain()
         layer_t2f = TimeDomain2FreqDomain()
@@ -36,11 +35,11 @@ class TestDomainTransforms(unittest.TestCase):
 
 class TestNormalization(unittest.TestCase):
     def test_rms_normalize(self):
-        '''
+        """
         Tests the RMSNormalize layer to ensure the layer is normalizing inputs to RMS.
-        '''
+        """
         batch_size = np.random.randint(1, 64)
-        spatial_size = 2**np.random.randint(8, 16)
+        spatial_size = 2 ** np.random.randint(8, 16)
         # generate batches with different means and stdevs
         means = np.geomspace(1e-2, 1e3, 6) * (np.random.randint(0, 2, size=6) * 2 - 1)
         stdevs = np.geomspace(1e-2, 1e8, 4)
@@ -58,10 +57,10 @@ class TestNormalization(unittest.TestCase):
 
 class TestGaussianNoise(unittest.TestCase):
     def test_skip_on_eval(self):
-        '''
+        """
         When self.training == True (before eval) noise will be added with this layer.
         Otherwise it will just return the same input.
-        '''
+        """
         noise_layer = GaussianNoise(spatial_size=64)
         alpha = torch.randn(1, 2, 64)
         omega, _ = noise_layer(alpha)
@@ -71,7 +70,7 @@ class TestGaussianNoise(unittest.TestCase):
         self.assertTrue(torch.equal(alpha, omega))
 
     def test_snr_ranges(self):
-        '''lower the SNR, lower the relationship to original signal'''
+        """lower the SNR, lower the relationship to original signal"""
         alpha = torch.randn(1, 2, 64)
         rfloss = RFLoss(weight_spec=0)
         for min_snr_db in np.arange(-10, 15, 5):

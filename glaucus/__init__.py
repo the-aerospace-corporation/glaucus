@@ -2,10 +2,11 @@
 # This file is a part of Glaucus
 # SPDX-License-Identifier: LGPL-3.0-or-later
 
-__version__ = '1.1.3'
+__version__ = '1.1.4'
 
 from .rfloss import *
 from .layers import *
 from .gblocks import *
 from .fcblocks import *
 from .autoencoders import *
+from .utils import *

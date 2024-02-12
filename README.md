@@ -3,7 +3,8 @@
 # Glaucus
 
 The Aerospace Corporation is proud to present our complex-valued encoder,
-decoder, and a new loss function for RF DSP in PyTorch.
+decoder, and a new loss function for radio frequency (RF) digital signal
+processing (DSP) in PyTorch.
 
 ## Video (click to play)
 
@@ -18,8 +19,9 @@ decoder, and a new loss function for RF DSP in PyTorch.
 
 ### Testing
 
-* `coverage run -a --source=glaucus -m pytest --doctest-modules; coverage html`
-* `pytest .`
+* `pytest`
+* `coverage run`
+* `pylint glaucus tests`
 
 ### Use pre-trained model with SigMF data
 
@@ -41,6 +43,7 @@ state_dict = torch.hub.load_state_dict_from_url(
     map_location='cpu')
 model.load_state_dict(state_dict)
 # prepare for prediction
+model.freeze()
 model.eval()
 torch.quantization.convert(model, inplace=True)
 # get samples into NL tensor
@@ -53,6 +56,7 @@ y_encoded_uint8 = torch.int_repr(y_encoded)
 ```
 
 #### Higher-accuracy pre-trained model
+
 ```python
 # define architecture
 import torch
@@ -68,6 +72,24 @@ state_dict = torch.hub.load_state_dict_from_url(
     'https://github.com/the-aerospace-corporation/glaucus/releases/download/v1.1.0/glaucus-1024-761-c49063fd.pth',
     map_location='cpu')
 model.load_state_dict(state_dict)
+# see above for rest
+```
+
+#### Use pre-trained model & discard quantization layers
+
+```python
+# create model, but skip quantization
+from glaucus.utils import adapt_glaucus_quantized_weights
+model = GlaucusAE(bottleneck_quantize=False, data_format='nl')
+state_dict = torch.hub.load_state_dict_from_url(
+    'https://github.com/the-aerospace-corporation/glaucus/releases/download/v1.1.0/glaucus-512-3275-5517642b.pth',
+    map_location='cpu')
+state_dict = adapt_glaucus_quantized_weights(state_dict)
+# ignore "unexpected_keys" warning
+model.load_state_dict(state_dict, strict=False)
+# prepare for evaluation mode
+model.freeze()
+model.eval()
 # see above for rest
 ```
 

@@ -1,0 +1,76 @@
+[project]
+name = "glaucus"
+description = "Glaucus is a PyTorch complex-valued ML autoencoder & RF estimation python module. "
+keywords = ["dsp", "ml", "autoencoder", "sigint", "rf"]
+classifiers = [
+    "License :: OSI Approved :: GNU Lesser General Public License v3 or later (LGPLv3+)",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+dynamic = ["version", "readme"]
+authors = [
+    {name = "Kyle Logue", email = "kyle.logue@aero.org"}
+]
+requires-python = ">=3.8"
+dependencies = [
+    "torch",        # basic ML framework
+    "lightning",    # extensions for PyTorch
+    "madgrad",      # our favorite optimizer
+    "hypothesis",   # best unit testing
+    ]
+    [project.urls]
+    repository = "https://github.com/the-aerospace-corporation/glaucus"
+
+[tool.setuptools]
+packages = ["glaucus"]
+    [tool.setuptools.dynamic]
+    version = {attr = "glaucus.__version__"}
+    readme = {file = ["README.md"], content-type = "text/markdown"}
+
+[build-system]
+requires = ["setuptools>=65.0", "setuptools-scm"]
+build-backend = "setuptools.build_meta"
+
+[tool.coverage.run]
+branch = true
+source = ["glaucus", "tests"]
+# -rA captures stdout from all tests and places it after the pytest summary
+command_line = "-m pytest -rA --doctest-modules --junitxml=pytest.xml"
+
+[tool.pytest.ini_options]
+addopts = "--doctest-modules"
+testpaths = ["glaucus", "tests"]
+
+[tool.pylint]
+    [tool.pylint.main]
+    load-plugins = [
+        "pylint.extensions.typing",
+        "pylint.extensions.docparams",
+    ]
+    exit-zero = true
+    [tool.pylint.messages_control]
+    disable = [
+        "logging-not-lazy",
+        "missing-module-docstring",
+        "import-error",
+        "unspecified-encoding",
+    ]
+    max-line-length = 160
+    [tool.pylint.REPORTS]
+    # omit from the similarity reports
+    ignore-comments = "yes"
+    ignore-docstrings = "yes"
+    ignore-imports = "yes"
+    ignore-signatures = "yes"
+    min-similarity-lines = 4
+
+[tool.pytype]
+inputs = ["glaucus", "tests"]
+
+[tool.black]
+line-length = 160
