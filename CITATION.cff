@@ -9,7 +9,7 @@ message: >-
   for RF DSP in PyTorch.
 type: software
 authors:
-  - given-names: Kye Logue
+  - given-names: Kyle Logue
     email: kyle.logue@aero.org
     affiliation: The Aerospace Corporation
 identifiers:

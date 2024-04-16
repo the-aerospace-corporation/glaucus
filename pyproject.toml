@@ -22,6 +22,7 @@ dependencies = [
     "lightning",    # extensions for PyTorch
     "madgrad",      # our favorite optimizer
     "hypothesis",   # best unit testing
+    "coverage",     # for running tests
     ]
     [project.urls]
     repository = "https://github.com/the-aerospace-corporation/glaucus"
