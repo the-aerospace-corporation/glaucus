@@ -1,18 +1,20 @@
-"""ensure layers are working"""
 # Copyright 2023 The Aerospace Corporation
 # This file is a part of Glaucus
 # SPDX-License-Identifier: LGPL-3.0-or-later
 
+"""ensure layers are working"""
+
 import unittest
+
 import numpy as np
 import torch
 
 from glaucus import (
-    TimeDomain2FreqDomain,
     FreqDomain2TimeDomain,
-    RMSNormalize,
     GaussianNoise,
     RFLoss,
+    RMSNormalize,
+    TimeDomain2FreqDomain,
 )
 
 
@@ -77,11 +79,11 @@ class TestGaussianNoise(unittest.TestCase):
             high_noise_layer = GaussianNoise(
                 spatial_size=64,
                 min_snr_db=min_snr_db,
-                max_snr_db=min_snr_db+1)
+                max_snr_db=min_snr_db + 1)
             low_noise_layer = GaussianNoise(
                 spatial_size=64,
-                min_snr_db=min_snr_db+5,
-                max_snr_db=min_snr_db+6)
+                min_snr_db=min_snr_db + 5,
+                max_snr_db=min_snr_db + 6)
             omega_high, _ = high_noise_layer(alpha)
             omega_low, _ = low_noise_layer(alpha)
             self.assertLess(

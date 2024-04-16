@@ -1,9 +1,11 @@
-"""ensure RFLoss is working"""
 # Copyright 2023 The Aerospace Corporation
 # This file is a part of Glaucus
 # SPDX-License-Identifier: LGPL-3.0-or-later
 
+"""ensure RFLoss is working"""
+
 import unittest
+
 import torch
 
 from glaucus import RFLoss

@@ -1,11 +1,14 @@
-"""ensure blocks are working"""
 # Copyright 2023 The Aerospace Corporation
 # This file is a part of Glaucus
 # SPDX-License-Identifier: LGPL-3.0-or-later
 
+"""ensure blocks are working"""
+
 import unittest
+
 import torch
-from hypothesis import settings, given, strategies as st
+from hypothesis import given, settings
+from hypothesis import strategies as st
 
 from glaucus import FullyConnected, GBlock, GlaucusNet, blockgen
 
@@ -25,8 +28,8 @@ class TestParams(unittest.TestCase):
         # for spatial_dim in 2**np.arange(8, 14):
         encoder_blocks = blockgen(steps=steps, spatial_in=spatial_dim, spatial_out=8, filters_in=2, filters_out=filters_mid, mode="encoder")
         decoder_blocks = blockgen(steps=steps, spatial_in=8, spatial_out=spatial_dim, filters_in=filters_mid, filters_out=2, mode="decoder")
-        encoder = GlaucusNet(mode="encoder", blocks=encoder_blocks, spatial_dim=spatial_dim)
-        decoder = GlaucusNet(mode="decoder", blocks=decoder_blocks, spatial_dim=spatial_dim)
+        encoder = GlaucusNet(mode="encoder", blocks=encoder_blocks)
+        decoder = GlaucusNet(mode="decoder", blocks=decoder_blocks)
         trash_x = torch.randn(3, 2, spatial_dim)
         trash_y = decoder(encoder(trash_x))
         self.assertEqual(trash_x.shape, trash_y.shape)
