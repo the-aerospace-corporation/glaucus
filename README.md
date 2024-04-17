@@ -1,6 +1,8 @@
-![Glaucus Atlanticus](https://upload.wikimedia.org/wikipedia/commons/thumb/2/21/Glaucus_atlanticus_1_cropped.jpg/247px-Glaucus_atlanticus_1_cropped.jpg)
+![Glaucus Atlanticus Sea Slug](https://upload.wikimedia.org/wikipedia/commons/thumb/2/21/Glaucus_atlanticus_1_cropped.jpg/247px-Glaucus_atlanticus_1_cropped.jpg)
 
 # Glaucus
+
+[![Glaucus Package Workflow](https://github.com/the-aerospace-corporation/glaucus/actions/workflows/main.yml/badge.svg)](https://github.com/the-aerospace-corporation/glaucus/actions/workflows/main.yml)
 
 The Aerospace Corporation is proud to present our complex-valued encoder,
 decoder, and a new loss function for radio frequency (RF) digital signal
