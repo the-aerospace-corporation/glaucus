@@ -23,6 +23,7 @@ dependencies = [
     "madgrad",      # our favorite optimizer
     "hypothesis",   # best unit testing
     "coverage",     # for running tests
+    "pytest",       # base test framework
     ]
     [project.urls]
     repository = "https://github.com/the-aerospace-corporation/glaucus"
