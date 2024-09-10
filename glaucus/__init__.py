@@ -2,7 +2,7 @@
 # This file is a part of Glaucus
 # SPDX-License-Identifier: LGPL-3.0-or-later
 
-__version__ = '1.2.0'
+__version__ = '2.0.0'
 
 from .autoencoders import *
 from .fcblocks import *

@@ -25,6 +25,67 @@ processing (DSP) in PyTorch.
 * `coverage run`
 * `pylint glaucus tests`
 
+### Load Vector Quantized VAE Model
+*New in v2.0.0*
+
+```python
+import torch
+
+from glaucus import GlaucusRVQVAE
+
+# define model
+model = GlaucusRVQVAE(
+    num_embed=1024, 
+    embed_dim=128, 
+    conv_filters=32, 
+    compression_ratios=[8, 4, 2, 2], 
+    num_quantizers=16, 
+    data_format='nl', 
+    quantize_dropout=True)
+# get weights
+state_dict = torch.hub.load_state_dict_from_url(
+    'https://github.com/the-aerospace-corporation/glaucus/releases/download/v2.0.0/gvq-1024-a4baf001.pth',
+    map_location='cpu')
+model.load_state_dict(state_dict)
+model.freeze()
+model.eval()
+```
+### Example Usage
+#### Forward pass
+```python
+x_tensor = torch.randn(7, 4096, dtype=torch.complex64)
+x_hat = model(x_tensor) # (7, 4096)
+```
+#### Encode and decode
+```python
+indices, scale = model.encode(x_tensor) # (7, 32, 32), (7, 1)
+x_hat = model.decode(indices, scale) # (7, 4096)
+```
+#### Discarding scale factor
+Omit scale if RMS denormalization is not needed; output will be RMS normalized. 
+```python
+x_hat = model.decode(indices) # (7, 4096)
+```
+#### Discarding codebooks
+For extra compression, you can discard the last N codebooks, up to ```num_quantizers - 1``` (will reduce reconstruction accuracy).
+```python
+indices = indices[..., :9] # (7, 32, 9)
+x_hat = model.decode(indices, scale) # (7, 4096)
+```
+#### Arbitrary length input
+The new VQ model accepts arbitrary length RF input and will utilize history between samples when reconstructing. This history does NOT extend between batches, e.g. for a (7, 8192) shape input the model will only have a "context length" of 8192.
+For best results, make sure your input length is a multiple of the product of ```compression_ratios```. Otherwise, the model will output extra samples in the decoding step that you will need to truncate.
+```python
+x_tensor = torch.randn(7, 8*4*2*2, dtype=torch.complex64)
+x_hat = model(x_tensor) # (7, 8*4*2*2)
+x_tensor = torch.randn(7, 4096*1, dtype=torch.complex64)
+x_hat = model(x_tensor) # (7, 4096*1)
+x_tensor = torch.randn(7, 4096*2, dtype=torch.complex64)
+x_hat = model(x_tensor) # (7, 4096*2)
+x_tensor = torch.randn(7, 4096*3, dtype=torch.complex64)
+x_hat = model(x_tensor) # (7, 4096*3)
+```
+
 ### Load Variational Autoencoder Model
 *New in v1.2.0*
 

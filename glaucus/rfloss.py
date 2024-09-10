@@ -23,6 +23,9 @@ class RFLoss(_Loss):
         weight_align: float = 1,
         weight_env: float = 1,
         weight_fft: float = 0,
+        weight_time: float = 0,
+        weight_speccor: float = 0,
+        weight_rms: float = 0,
         data_format: str = "ncl",
         overlap_frac: int = 0,
         reduction: str = "mean",
@@ -49,6 +52,16 @@ class RFLoss(_Loss):
             OK metric that ensure the scale of inputs w.r.t phase are similar
             over the observation period. In my experience ML autoencoders learn
             this quickly then do not improve.
+        weight_time : float, default 0
+            Directly compares input to output in the time domain. May be
+            difficult to use due to the noisy nature of training data
+        weight_speccor : float, default 0
+            Generates a correlation score between two spectrograms, sliding in the
+            time dimension and averaging across frequency bins. May be more useful
+            for evaluating the similarities of the shapes of the spectrogram.
+        weight_rms : float, default 0
+            Metric that ensures that the general scale of inputs are similar.
+            May be conflicting with weight_env.
         weight_fft : float, default 0
             This component disabled since it is simply a much worse version of
             the spectrogram loss.
@@ -95,16 +108,20 @@ class RFLoss(_Loss):
         assert 0 <= overlap_frac < 1, "fractional value is between [0, 1)"
         spatial_exponent = np.log2(spatial_size)
         if spatial_exponent % 1 != 0 and overlap_frac == 0:
-            log.warning('RFLoss on spatial size 2**%.2f may miss some end samples.', spatial_exponent)
+            log.warning("RFLoss on spatial size 2**%.2f may miss some end samples.", spatial_exponent)
 
         self.fftsizes = 2 ** (np.arange(-2, 3, dtype=int) + int(spatial_exponent / 2))
         self.spec_scale = 2 / len(self.fftsizes)
         self.spatial_size = 2**spatial_exponent
+        self.rms_scale = 1 / self.spatial_size**0.5
         self.weight_xcor = weight_xcor
         self.weight_align = weight_align
         self.weight_spec = weight_spec
         self.weight_env = weight_env
         self.weight_fft = weight_fft
+        self.weight_time = weight_time
+        self.weight_rms = weight_rms
+        self.weight_speccor = weight_speccor
         self._rms = RMSNormalizeIQ(spatial_size=spatial_size)
         self.data_format = data_format
 
@@ -112,7 +129,7 @@ class RFLoss(_Loss):
         if overlap_frac > 0:
             self.overlaps = np.round(self.fftsizes * self.overlap_frac).astype(int)
             for fdx, fftsize in enumerate(self.fftsizes):
-                self.register_buffer(f'window{fdx}', torch.hann_window(fftsize))
+                self.register_buffer(f"window{fdx}", torch.hann_window(fftsize))
                 # adjust scale so output is comparable with non-overlap version
                 self.spec_scale = 1
 
@@ -130,7 +147,7 @@ class RFLoss(_Loss):
         )
 
     @staticmethod
-    def spec_overlap(ray: Tensor, fftsize:int, overlap:int, window: Tensor):
+    def spec_overlap(ray: Tensor, fftsize: int, overlap: int, window: Tensor):
         """
         create high-resolution spectrogram with overlap & windowing
         """
@@ -142,19 +159,18 @@ class RFLoss(_Loss):
         if ray.ndim == 1:
             spec = torch.empty((nrows, fftsize), dtype=torch.complex64, device=ray.device)
             for rdx in range(nrows):
-                spec[rdx] = ray[rdx*hop_len:rdx*hop_len+fftsize]
+                spec[rdx] = ray[rdx * hop_len : rdx * hop_len + fftsize]
         elif ray.ndim == 2:
             spec = torch.empty((ray.size(0), nrows, fftsize), dtype=torch.complex64, device=ray.device)
             for rdx in range(nrows):
-                spec[:, rdx] = ray[:, rdx*hop_len:rdx*hop_len+fftsize]
+                spec[:, rdx] = ray[:, rdx * hop_len : rdx * hop_len + fftsize]
         else:
-            raise ValueError('Expected complex-valued NL or L')
+            raise ValueError("Expected complex-valued NL or L")
 
         spec = torch.fft.fft(spec * window, n=fftsize)
 
         # note that spec is un-shifted and complex
         return spec
-
 
     @staticmethod
     def spec_turbo(ray: Tensor, fftsize: int):
@@ -198,8 +214,8 @@ class RFLoss(_Loss):
             if self.overlap_frac:
                 overlap = self.overlaps[fdx]  # overlap amount different per fftsize
                 window = getattr(self, f"window{fdx}")  # retrieve precomputed window
-                spec_apple = self.spec_overlap(apple_cplx, fftsize=fftsize, overlap=overlap, window=window)
-                spec_banana = self.spec_overlap(banana_cplx, fftsize=fftsize, overlap=overlap, window=window)
+                spec_apple = torch.stft(apple_cplx, fftsize, hop_length=fftsize - overlap, window=window)  # batch, fftsize, time
+                spec_banana = torch.stft(banana_cplx, fftsize, hop_length=fftsize - overlap, window=window)
             else:
                 spec_apple = self.spec_turbo(apple_cplx, fftsize=fftsize)
                 spec_banana = self.spec_turbo(banana_cplx, fftsize=fftsize)
@@ -207,6 +223,51 @@ class RFLoss(_Loss):
 
             spec_loss += torch.mean((torch.abs(spec_apple) - torch.abs(spec_banana)) ** 2) / fftsize
         return spec_loss * self.spec_scale
+
+    def calc_speccor_loss(self, apple_cplx: Tensor, banana_cplx: Tensor):
+        """
+        spectrogram cross-correlation loss
+
+        track correlation of power spectrogram to reconstruct spectral qualities other than noise
+
+        Returns
+        -------
+        loss : Tensor
+            Value in range(0, 1).
+            Will be 1 if completely uncorrelated.
+            Will be 0 if completely correlated.
+        """
+        speccor_loss = 0.0
+        for fdx, fftsize in enumerate(self.fftsizes):
+            overlap = self.overlaps[fdx]  # overlap amount different per fftsize
+            window = getattr(self, f"window{fdx}")  # retrieve precomputed window
+            spec_apple = (
+                torch.abs(torch.stft(apple_cplx, fftsize, hop_length=fftsize - overlap, window=window, normalized=True, center=False)) ** 2
+            )  # batch, fftsize, time
+            spec_banana = (
+                torch.abs(torch.stft(banana_cplx, fftsize, hop_length=fftsize - overlap, window=window, normalized=True, center=False)) ** 2
+            )  # batch, fftsize, time
+            scale_apple = torch.einsum("bft->b", spec_apple**2)
+            scale_banana = torch.einsum("bft->b", spec_banana**2)
+            scale = torch.sqrt(scale_apple * scale_banana)
+            corr = torch.abs(torch.fft.ifft(torch.fft.fft(spec_apple) * torch.conj(torch.fft.fft(spec_banana))))
+
+            speccor_loss += 1.0 - torch.mean(torch.max(torch.sum(corr, dim=1), dim=-1).values / scale)
+
+        return speccor_loss / len(self.fftsizes)
+
+    def calc_time_loss(self, apple_cplx: Tensor, banana_cplx: Tensor):
+        """
+        L1 time domain loss
+
+        Directly compare samples to samples
+
+        Returns
+        -------
+        loss : Tensor
+            Value in range(0, inf).
+        """
+        return torch.nn.functional.l1_loss(apple_cplx, banana_cplx, reduction="mean") * self.weight_time
 
     def calc_xcor_loss(self, apple_fft: Tensor, banana_fft: Tensor):
         """
@@ -264,6 +325,20 @@ class RFLoss(_Loss):
         """
         return torch.mean((torch.abs(apple_fft) - torch.abs(banana_fft)) ** 2) / (2 * self.spatial_size)
 
+    def calc_rms_loss(self, apple_cplx: Tensor, banana_cplx: Tensor):
+        """
+        Calculate difference in RMS power
+
+        Returns
+        -------
+        loss : Tensor
+            Value in range(0, inf).
+        """
+        apple_rms = apple_cplx.norm(p=2, dim=-1) * self.rms_scale
+        banana_rms = banana_cplx.norm(p=2, dim=-1) * self.rms_scale
+
+        return torch.mean((apple_rms - banana_rms) ** 2)
+
     def forward(self, apple: Tensor, banana: Tensor):
         """
         compute loss and metrics
@@ -292,6 +367,10 @@ class RFLoss(_Loss):
             env_loss = self.weight_env * self.calc_env_loss(apple_cplx, banana_cplx)
             metrics["env_loss"] = env_loss
             total_loss += env_loss
+        if self.weight_rms:
+            rms_loss = self.weight_rms * self.calc_rms_loss(apple_cplx, banana_cplx)
+            metrics["rms_loss"] = rms_loss
+            total_loss += rms_loss
         # normalize for other loss considerations
         apple_cplx = self._rms(apple_cplx)
         banana_cplx = self._rms(banana_cplx)
@@ -299,6 +378,14 @@ class RFLoss(_Loss):
             spec_loss = self.weight_spec * self.calc_spec_loss(apple_cplx, banana_cplx)
             metrics["spec_loss"] = spec_loss
             total_loss += spec_loss
+        if self.weight_speccor:
+            speccor_loss = self.weight_speccor * self.calc_speccor_loss(apple_cplx, banana_cplx)
+            metrics["speccor_loss"] = speccor_loss
+            total_loss += speccor_loss
+        if self.weight_time:
+            time_loss = self.calc_time_loss(apple_cplx, banana_cplx)
+            metrics["time_loss"] = time_loss
+            total_loss += time_loss
         if self.weight_xcor or self.weight_align or self.weight_fft:
             # observe freq domain if necessary
             apple_fft = torch.fft.fft(apple_cplx)

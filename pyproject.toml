@@ -24,6 +24,8 @@ dependencies = [
     "hypothesis",   # best unit testing
     "coverage",     # for running tests
     "pytest",       # base test framework
+    "einops",       # tensor shape manipulation
+    "vector_quantize_pytorch", # vector quantization library
     ]
     [project.urls]
     repository = "https://github.com/the-aerospace-corporation/glaucus"

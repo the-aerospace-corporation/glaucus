@@ -9,15 +9,177 @@ import logging
 import lightning as L
 import torch
 from madgrad import MADGRAD
+from vector_quantize_pytorch import ResidualLFQ, ResidualVQ
 
 from .fcblocks import FullyConnected
 from .gblocks import DECODER_BLOCKS, ENCODER_BLOCKS, GlaucusNet
 from .layers import (FreqDomain2TimeDomain, GaussianNoise, RMSNormalize,
                      TimeDomain2FreqDomain)
 from .rfloss import RFLoss
+from .seanet import SEANetEncoder, SEANetDecoder
 
 log = logging.getLogger(__name__)
 
+class GlaucusRVQVAE(L.LightningModule):
+    """
+    RF Vector Quantized Variational Autoencoder
+
+    Differs from the original Glaucus AE in a few key ways:
+    * Utilizes SEANet-style encoder/decoder pair
+        - Can ingest variable length RF, but works best if slice length is a multiple of the combined compression ratios.
+        - Includes optional LSTM to allow for historical information between slices to be utilized
+    * Compresses via a residual-vector-quantized codebook architecture at the bottleneck, which quantizes encoded vectors into discrete "nearest approximations"
+
+    Credit to Facebook's Encodec research: https://arxiv.org/abs/2210.13438
+    """
+
+    def __init__(
+        self,
+        spatial_size: int = 4096,
+        compression_ratios: list = [8, 4, 4, 2],
+        conv_filters: int = 64,
+        lstm: int = 2,
+        embed_dim: int = 128,
+        quantizer: str = "vq",
+        num_quantizers: int = 16,
+        num_embed: int = 1024,
+        add_noise: bool = False,
+        data_format: str = "ncl",
+        **vq_kwargs,
+    ) -> None:
+        """
+        spatial_size: int, default 4096, optional
+            Length of RF input, only needed if adding training noise. Otherwise, you can input any length RF during inference.
+        compression_ratios: list, default [8, 4, 4, 2]
+            Downsampling/upsampling ratios of mirrored convolutional encoder and decoder. Output spatial size will be equal to
+            input spatial size divided by all compression ratios, so make sure that the length of your input is at minimum the
+            product of all compression_ratios.
+        conv_filters: int, default 64
+            Channel dimension of encoder/decoder pair. At each step in the convolutional network, doubles/halves for the encoder and decoder, respectively.
+        lstm: int, default 2
+            Number of LSTM layers to add at the end of encoder and at the beginning of the decoder. Set to 0 for no LSTM.
+        embed_dim: int, default 128
+            Dimension of latent space.
+        num_quantizers: int, default 16
+            Number of codebooks used to represent each embedded latent space value.
+        num_embed: int, default 1024
+            Number of total possible learned vectors per codebook. The total number of "bits" needed to represent the indices of each
+            codebook is log2(num_embed)
+        add_noise: bool, default False, optional
+            Set to true if you need to add noise while training.
+        data_format : str, default 'ncl'
+            Network normally consumes and produces complex-valued data represented as real-valued (NCL)
+            but if data is complex-valued (NL) will add a transform layer during encode/decode.
+        """
+        super().__init__()
+
+        self.save_hyperparameters()
+        assert data_format in ["ncl", "nl"]
+        assert num_embed <= 2**16, "num_embed/dictionary size too large"
+        assert quantizer in ["vq", "lfq"]
+
+        if num_embed <= 2**8:
+            self._enc_idx_dtype = torch.uint8
+        elif num_embed <= 2**16:
+            self._enc_idx_dtype = torch.int16
+
+        if quantizer == "vq":
+            Quantizer = ResidualVQ
+        elif quantizer == "lfq":
+            Quantizer = ResidualLFQ
+
+        self._noise_layer = GaussianNoise(spatial_size=spatial_size, min_snr_db=-10, max_snr_db=20)
+        self.encoder = SEANetEncoder(channels=2, dimension=embed_dim, n_filters=conv_filters, ratios=compression_ratios, lstm=lstm)
+        self.quantizer = Quantizer(codebook_size=num_embed, dim=embed_dim, num_quantizers=num_quantizers, **vq_kwargs)
+
+        self.decoder = SEANetDecoder(channels=2, dimension=embed_dim, n_filters=conv_filters, ratios=compression_ratios, lstm=lstm)
+
+    def forward(self, x):
+        """
+        Performs encoding and decoding in the same step. Use for verification purposes or training.
+        """
+        idx_or_enc, scale = self.encode(x)
+        if self.training:
+            enc = idx_or_enc.permute(0, 2, 1)
+            z_emb, _, q_loss = self.quantizer(enc)
+            q_loss = torch.mean(q_loss)
+            x_hat = self.decode(idx_or_z_emb=z_emb, scale=scale)[..., : x.shape[-1]]
+            return x_hat, q_loss
+        else:
+            x_hat = self.decode(idx_or_z_emb=idx_or_enc, scale=scale)[..., : x.shape[-1]]
+            return x_hat
+
+    def encode(self, x):
+        """
+        Encodes NCL or NL input into a quantized representation.
+        During training, outputs quantized latent space. Otherwise,
+        outputs codebook indices.
+
+        Parameters
+        ----------
+        x: Tensor of shape NCL or NL
+
+        Outputs
+        -------
+        enc_idx : Tensor
+            Codebook indices of shape (N, spatial_out)
+        OR
+        z_emb : Tensor
+            Quantized latent space representation of x (TRAINING ONLY)
+        scale: Tensor
+            Collection of scaling values to rescale output to correct values
+        """
+
+        if self.hparams.data_format == "ncl":
+            x = torch.view_as_complex(x.swapaxes(-1, -2).contiguous())
+        # RMS normalize before processing, save RMS scale factor to denormalize
+        scale = x.norm(p=2, dim=-1, keepdim=True) / ((x.shape[-1]) ** 0.5)
+        x = x / scale
+        x = torch.view_as_real(x).swapaxes(-1, -2)
+        # Add noise if training
+        if self.hparams.add_noise:
+            x, _ = self._noise_layer(x)
+        z_emb = self.encoder(x)
+        if self.training:
+            return z_emb, scale
+
+        z_emb = z_emb.permute(0, 2, 1)  # [N, C, L] -> [N, L, C]
+        _, enc_idx, _ = self.quantizer(z_emb)
+        enc_idx = enc_idx.type(self._enc_idx_dtype)
+
+        return enc_idx, scale
+
+    def decode(self, idx_or_z_emb, scale=None):
+        """
+        Takes in indices, generates quantized latent space, and reconstructs x_hat.
+        During training, directly operates on quantized latent space instead.
+
+        Parameters
+        ----------
+        idx_or_z_emb : Tensor
+            Codebook indices of shape (N, spatial_out) OR quantized latent space representation of x (TRAINING ONLY)
+        scale: Tensor, optional
+            Optional scale factor to rescale output to proper amplitude. Omit if average power reconstruction is not needed.
+
+        Outputs
+        -------
+        x_hat : Tensor
+            Reconstructed version of x
+        """
+        if self.training:
+            z_emb = idx_or_z_emb
+        else:
+            z_emb = self.quantizer.get_output_from_indices(idx_or_z_emb.type(torch.long))
+
+        z_emb = z_emb.permute(0, 2, 1)  # [N, L, C] -> [N, C, L]
+        x_hat = self.decoder(z_emb)
+
+        if scale is not None:
+            x_hat = x_hat * scale.view(-1, 1, 1)
+
+        if self.hparams.data_format == "nl":
+            x_hat = torch.view_as_complex(x_hat.swapaxes(-1, -2).contiguous())
+        return x_hat
 
 class GlaucusVAE(L.LightningModule):
     """
