@@ -14,7 +14,8 @@ classifiers = [
 ]
 dynamic = ["version", "readme"]
 authors = [
-    {name = "Kyle Logue", email = "kyle.logue@aero.org"}
+    {name = "Kyle Logue", email = "kyle.logue@aero.org"},
+    {name = "Philip Giang", email = "philip.k.giang@aero.org"}
 ]
 requires-python = ">=3.8"
 dependencies = [
@@ -25,6 +26,7 @@ dependencies = [
     "coverage",     # for running tests
     "pytest",       # base test framework
     "einops",       # tensor shape manipulation
+    "cbitstruct",   # for byte packing/unpacking
     "vector_quantize_pytorch", # vector quantization library
     ]
     [project.urls]
@@ -75,6 +77,9 @@ testpaths = ["glaucus", "tests"]
 
 [tool.pytype]
 inputs = ["glaucus", "tests"]
+
+[tool.isort]
+profile = "black"
 
 [tool.black]
 line-length = 160

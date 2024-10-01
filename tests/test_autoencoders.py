@@ -1,4 +1,4 @@
-# Copyright 2023 The Aerospace Corporation
+# Copyright 2024 The Aerospace Corporation
 # This file is a part of Glaucus
 # SPDX-License-Identifier: LGPL-3.0-or-later
 
@@ -7,11 +7,29 @@
 import unittest
 
 import torch
+from hypothesis import given, settings
+from hypothesis import strategies as st
 
-from glaucus import FullyConnectedAE, GlaucusAE, GlaucusVAE
+from glaucus import FullyConnectedAE, GlaucusAE, GlaucusRVQVAE, GlaucusVAE
 
 
 class TestAE(unittest.TestCase):
+    @given(
+        data_format=st.sampled_from(["ncl", "nl"]),
+        length=st.integers(min_value=128, max_value=65536),
+    )
+    @settings(deadline=None, max_examples=10)
+    def test_vqvae_roundtrip(self, data_format, length):
+        """the  output size should always be the same as the input size"""
+        if data_format == "ncl":
+            trash_x = torch.randn(1, 2, length, dtype=torch.float32)
+        else:
+            trash_x = torch.randn(1, length, dtype=torch.complex64)
+        ae = GlaucusRVQVAE(data_format=data_format)
+        ae.freeze()
+        trash_y = ae(trash_x)
+        self.assertEqual(trash_x.shape, trash_y.shape)
+
     def test_ae_roundtrip(self):
         """the  output size should always be the same as the input size"""
         for AE in [GlaucusAE, FullyConnectedAE, GlaucusVAE]:

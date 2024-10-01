@@ -25,8 +25,13 @@ processing (DSP) in PyTorch.
 * `coverage run`
 * `pylint glaucus tests`
 
-### Load Vector Quantized VAE Model
-*New in v2.0.0*
+## Glaucus v2.0.0
+
+The newest version of the autoencoder can encode arbitrary length continuous data using a combination of LSTM and residual vector quantization. Signal features are sequentially encoded and subtracted from the original, allowing a variable amount of compression from `51.2x` to `819.2x`.
+
+
+
+### Vector Quantized Variational Autoencoder Model
 
 ```python
 import torch
@@ -34,60 +39,70 @@ import torch
 from glaucus import GlaucusRVQVAE
 
 # define model
-model = GlaucusRVQVAE(
-    num_embed=1024, 
-    embed_dim=128, 
-    conv_filters=32, 
-    compression_ratios=[8, 4, 2, 2], 
-    num_quantizers=16, 
-    data_format='nl', 
-    quantize_dropout=True)
+model = GlaucusRVQVAE(quantize_dropout=True)
 # get weights
 state_dict = torch.hub.load_state_dict_from_url(
-    'https://github.com/the-aerospace-corporation/glaucus/releases/download/v2.0.0/gvq-1024-a4baf001.pth',
-    map_location='cpu')
+    "https://github.com/the-aerospace-corporation/glaucus/releases/download/v2.0.0/gvq-1024-a4baf001.pth",
+    map_location="cpu",
+)
 model.load_state_dict(state_dict)
 model.freeze()
 model.eval()
 ```
-### Example Usage
-#### Forward pass
+
+#### Usage
+
+The model will take any (batch_size, length) as a complex tensor. The forward function will encode and decode sequentially returning the same shape as the input.
+
 ```python
-x_tensor = torch.randn(7, 4096, dtype=torch.complex64)
-x_hat = model(x_tensor) # (7, 4096)
-```
-#### Encode and decode
-```python
-indices, scale = model.encode(x_tensor) # (7, 32, 32), (7, 1)
-x_hat = model.decode(indices, scale) # (7, 4096)
-```
-#### Discarding scale factor
-Omit scale if RMS denormalization is not needed; output will be RMS normalized. 
-```python
-x_hat = model.decode(indices) # (7, 4096)
-```
-#### Discarding codebooks
-For extra compression, you can discard the last N codebooks, up to ```num_quantizers - 1``` (will reduce reconstruction accuracy).
-```python
-indices = indices[..., :9] # (7, 32, 9)
-x_hat = model.decode(indices, scale) # (7, 4096)
-```
-#### Arbitrary length input
-The new VQ model accepts arbitrary length RF input and will utilize history between samples when reconstructing. This history does NOT extend between batches, e.g. for a (7, 8192) shape input the model will only have a "context length" of 8192.
-For best results, make sure your input length is a multiple of the product of ```compression_ratios```. Otherwise, the model will output extra samples in the decoding step that you will need to truncate.
-```python
-x_tensor = torch.randn(7, 8*4*2*2, dtype=torch.complex64)
-x_hat = model(x_tensor) # (7, 8*4*2*2)
-x_tensor = torch.randn(7, 4096*1, dtype=torch.complex64)
-x_hat = model(x_tensor) # (7, 4096*1)
-x_tensor = torch.randn(7, 4096*2, dtype=torch.complex64)
-x_hat = model(x_tensor) # (7, 4096*2)
-x_tensor = torch.randn(7, 4096*3, dtype=torch.complex64)
-x_hat = model(x_tensor) # (7, 4096*3)
+x_tensor = torch.randn(11, 11113, dtype=torch.complex64)
+y_tensor = model(x_tensor) # shape (11, 11113)
 ```
 
-### Load Variational Autoencoder Model
-*New in v1.2.0*
+To get the _compressed_ features from the input signal, you run the encode step. This returns a compressed feature tensor of `(batch_size, input_len//compression_factor, num_quantizers)` and a scale parameter. The decode function returns the reconstruction RMS normalized, or scaled if a scale parameter is given. `compression_factor` is equal to the product of the model `compression_ratios` and is `256` for the pretrained model.
+
+```python
+x_tensor = torch.randn(3, 65536, dtype=torch.complex64)
+y_encoded, y_scale = model.encode(x_tensor) # shapes ((3, 512, 16), (3,1))
+y_tensor_rms = model.decode(y_encoded)      # shape (3, 65536)
+y_tensor = model.decode(y_encoded, y_scale) # shape (3, 65536)
+```
+
+The pretrained model has a base compression of `51.2x`, but can be scaled to `819.2x` if desired by discarding `N` codebooks up to `num_quantizers - 1`. This will reduce reconstruction accuracy:
+
+```python
+y_encoded_truncated = y_encoded[..., :9] # keep 9 of 16 codebooks; new shape (3, 512, 9)
+y_tensor_57x = model.decode(y_encoded_truncated, y_scale) # shape (3, 65536)
+```
+
+![codebook visualization](glaucus-codebooks.gif)
+
+y_tensor is an integer type, so to get the smallest binary representation for storage you can store the bytes. The y_tensor is only using `log2(num_embed)` bits, so if we are very clever we can pack bits to keep even fewer bytes. Compare sizes for the first item in the batch from above:
+
+```python
+>>> from glaucus import pack_tensor, unpack_tensor
+>>> len(x_tensor[0].numpy().tobytes())
+524288
+>>> len(pack_tensor(y_encoded[0].ravel())) # 51x smaller
+10240
+>>> len(pack_tensor(y_encoded_truncated[0].ravel())) # 91x smaller
+5760
+>>> recovered_y_encoded = unpack_tensor(pack_tensor(y_encoded[0].ravel())).reshape(1, -1, 16)
+>>> model.decode(recovered_y_encoded).shape
+torch.Size([1, 65536])
+```
+
+#### Note on Arbitrary Input Length
+
+The new vector quantization model accepts arbitrary length RF input and will utilize history between samples when reconstructing. This history does NOT extend between batches, e.g. for a (7, 8192) shape input the model will only have a "context length" of 8192.
+
+If the input length is not a multiple of the the product of `compression_ratios` (`256` for the current pretrained model), the model will output extra samples in the decoding step that you will need to truncate.
+
+## Glaucus v1.2.0
+
+Variational Autoencoder with progressive resampling and a better defined latent space.
+
+### Variational Autoencoder Model
 
 ```python
 import torch
@@ -109,6 +124,8 @@ model.eval()
 x_tensor = torch.randn(7, 4096, dtype=torch.complex64)
 y_tensor, y_encoded, _, _ = model(x_tensor)
 ```
+
+## Glaucus v1.0.0
 
 ### Use pre-trained model with SigMF data
 
@@ -205,7 +222,7 @@ loss(xxx, yyy)
 
 ### Train model with TorchSig
 
-*partially implemented pending update or replace with notebook example*
+_partial implementation_:
 
 ```python
 import lightning as L
@@ -219,8 +236,8 @@ signal_data = torchsig.datasets.Sig53(root=str(cache_path))
 # 80 / 10 / 10 split
 train_dataset, val_dataset, test_dataset = torch.utils.data.random_split(
     signal_data,
-    (len(signal_data)*np.array([0.8, 0.1, 0.1])).astype(int),
-    generator=torch.Generator().manual_seed(0xcab005e)
+    (len(signal_data) * np.array([0.8, 0.1, 0.1])).astype(int),
+    generator=torch.Generator().manual_seed(0xCAB005E),
 )
 class RFDataModule(L.LightningDataModule):
     '''
@@ -256,12 +273,13 @@ trainer.test(model, datamodule=datamodule, ckpt_path="best")
 
 ## Pre-trained Model List
 
-| model weights                                                                                                                                          | desc         | published  | mem (MB) | params (M) | multiadds (M) | provenance                                                                                                                     |
-|--------------------------------------------------------------------------------------------------------------------------------------------------------|--------------|------------|----------|------------|---------------|--------------------------------------------------------------------------------------------------------------------------------|
-| [glaucus-512-3275-5517642b](https://github.com/the-aerospace-corporation/glaucus/releases/download/v1.1.0/glaucus-512-3275-5517642b.pth)               | AE small     | 2023-03-02 | 17.9     | 2.030      | 259           | .009 pfs-days on modulation-only Aerospace Dset                                                                                |
-| [glaucus-1024-761-c49063fd](https://github.com/the-aerospace-corporation/glaucus/releases/download/v1.1.0/glaucus-1024-761-c49063fd.pth)               | AE accurate  | 2023-03-02 | 19.9     | 2.873      | 380           | .035 pfs-days modulation & general waveform Aerospace Dset                                                                     |
-| [glaucus-1024-sig53TLe37-2956bcb6](https://github.com/the-aerospace-corporation/glaucus/releases/download/v1.1.3/glaucus-1024-sig53TLe37-2956bcb6.pth) | AE for Sig53 | 2023-05-16 | 19.9     | 2.873      | 380           | transfer learning from glaucus-1024-761-c49063fd w/Sig53 Dset                                                                  |
-| [gvae-1920-2b2478a0.pth](https://github.com/the-aerospace-corporation/glaucus/releases/download/v1.2.0/gvae-1920-2b2478a0.pth)                         | VAE          | 2024-03-25 | 21.6     | 3.440      | 263           | Variational Autoencoder with progressive resampling and a better defined latent space. .006 pfs-days on general waveform Dset. |
+| model weights                                                                                                                                          | desc         | published  | mem (MB) | params (M) | multiadds (M) | provenance                                                    |
+|--------------------------------------------------------------------------------------------------------------------------------------------------------|--------------|------------|----------|------------|---------------|---------------------------------------------------------------|
+| [gvq-1024-a4baf001.pth](https://github.com/the-aerospace-corporation/glaucus/releases/download/v2.0.0/gvq-1024-a4baf001.pth)                           | VQ-VAE       | 2024-09-11 | 60.3     | 14.655     | 2370          | .016 pfs-days on general waveform Aerospace Dset                                          |
+| [gvae-1920-2b2478a0.pth](https://github.com/the-aerospace-corporation/glaucus/releases/download/v1.2.0/gvae-1920-2b2478a0.pth)                         | VAE          | 2024-03-25 | 21.6     | 3.440      | 263           | .006 pfs-days on general waveform Dset.                       |
+| [glaucus-1024-sig53TLe37-2956bcb6](https://github.com/the-aerospace-corporation/glaucus/releases/download/v1.1.3/glaucus-1024-sig53TLe37-2956bcb6.pth) | AE for Sig53 | 2023-05-16 | 19.9     | 2.873      | 380           | transfer learning from glaucus-1024-761-c49063fd w/Sig53 Dset |
+| [glaucus-1024-761-c49063fd](https://github.com/the-aerospace-corporation/glaucus/releases/download/v1.1.0/glaucus-1024-761-c49063fd.pth)               | AE accurate  | 2023-03-02 | 19.9     | 2.873      | 380           | .035 pfs-days modulation & general waveform Aerospace Dset    |
+| [glaucus-512-3275-5517642b](https://github.com/the-aerospace-corporation/glaucus/releases/download/v1.1.0/glaucus-512-3275-5517642b.pth)               | AE small     | 2023-03-02 | 17.9     | 2.030      | 259           | .009 pfs-days on modulation-only Aerospace Dset               |
 
 ### Note on pfs-days
 
@@ -273,7 +291,7 @@ Per [OpenAI appendix](https://openai.com/blog/ai-and-compute/#appendixmethods) h
 
 ## Papers
 
-This code is documented by the two following IEEE publications.
+Code prior to `v2.0.0` is documented by the two following IEEE publications.
 
 ### Glaucus: A Complex-Valued Radio Signal Autoencoder
 [![DOI](https://zenodo.org/badge/DOI/10.1109/AERO55745.2023.10115599.svg)](https://doi.org/10.1109/AERO55745.2023.10115599)
@@ -310,8 +328,3 @@ alternative license. An alternative license can allow you to create proprietary
 applications around Aerospace products without being required to meet the
 obligations of the GPL. To inquire about an alternative license, please get in
 touch with us at [oss@aero.org](mailto:oss@aero.org).
-
-## To-Do
-
-* allow `pretrained_weights` during model init
-* add training notebook and colab example

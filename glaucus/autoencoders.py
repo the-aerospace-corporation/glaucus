@@ -36,26 +36,27 @@ class GlaucusRVQVAE(L.LightningModule):
     def __init__(
         self,
         spatial_size: int = 4096,
-        compression_ratios: list = [8, 4, 4, 2],
-        conv_filters: int = 64,
+        compression_ratios: list = [8, 4, 2, 2],
+        conv_filters: int = 32,
         lstm: int = 2,
         embed_dim: int = 128,
         quantizer: str = "vq",
         num_quantizers: int = 16,
         num_embed: int = 1024,
         add_noise: bool = False,
-        data_format: str = "ncl",
+        data_format: str = "nl",
         **vq_kwargs,
     ) -> None:
         """
         spatial_size: int, default 4096, optional
             Length of RF input, only needed if adding training noise. Otherwise, you can input any length RF during inference.
         compression_ratios: list, default [8, 4, 4, 2]
-            Downsampling/upsampling ratios of mirrored convolutional encoder and decoder. Output spatial size will be equal to
-            input spatial size divided by all compression ratios, so make sure that the length of your input is at minimum the
-            product of all compression_ratios.
-        conv_filters: int, default 64
-            Channel dimension of encoder/decoder pair. At each step in the convolutional network, doubles/halves for the encoder and decoder, respectively.
+            Downsampling/upsampling ratios of mirrored convolutional encoder and decoder. Output spatial size will be
+            equal to input spatial size divided by all compression ratios, so make sure that the length of your input is
+            at minimum the product of all compression_ratios.
+        conv_filters: int, default 32
+            Channel dimension of encoder/decoder pair. At each step in the convolutional network, doubles/halves for the
+            encoder and decoder, respectively.
         lstm: int, default 2
             Number of LSTM layers to add at the end of encoder and at the beginning of the decoder. Set to 0 for no LSTM.
         embed_dim: int, default 128
@@ -63,11 +64,11 @@ class GlaucusRVQVAE(L.LightningModule):
         num_quantizers: int, default 16
             Number of codebooks used to represent each embedded latent space value.
         num_embed: int, default 1024
-            Number of total possible learned vectors per codebook. The total number of "bits" needed to represent the indices of each
-            codebook is log2(num_embed)
+            Number of total possible learned vectors per codebook. The total number of "bits" needed to represent the
+            indices of each codebook is log2(num_embed)
         add_noise: bool, default False, optional
             Set to true if you need to add noise while training.
-        data_format : str, default 'ncl'
+        data_format : str, default 'nl'
             Network normally consumes and produces complex-valued data represented as real-valued (NCL)
             but if data is complex-valued (NL) will add a transform layer during encode/decode.
         """
